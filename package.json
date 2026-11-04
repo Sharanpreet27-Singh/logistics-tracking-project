@@ -1,0 +1,20 @@
+{
+  "name": "logistics-fleet-tracking",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-Time Logistics & Fleet Tracking System - root launcher for the server and client",
+  "scripts": {
+    "setup": "npm install --prefix server && npm install --prefix client",
+    "seed": "npm run seed --prefix server",
+    "dev": "concurrently -k -n server,client -c blue,magenta \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev:all": "concurrently -k -n server,client,sim -c blue,magenta,yellow \"npm run dev --prefix server\" \"npm run dev --prefix client\" \"npm run simulate:wait --prefix . \"",
+    "simulate": "npm run simulate --prefix server",
+    "simulate:wait": "wait-on tcp:5000 && npm run simulate --prefix server -- --auto",
+    "test": "npm test --prefix server",
+    "build": "npm run build --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "wait-on": "^8.0.1"
+  }
+}

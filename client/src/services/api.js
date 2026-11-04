@@ -44,7 +44,7 @@ api.interceptors.response.use(
 );
 
 export const errorMessage = (err) =>
-  err.response?.data?.errors?.map((e) => `${e.field}: ${e.message}`).join(', ') ||
+  err.response?.data?.errors?.map((e) => e.message).join('. ') ||
   err.response?.data?.message ||
   err.message ||
   'Something went wrong';

@@ -20,7 +20,15 @@ const dispatch = authorize('admin', 'manager', 'dispatcher');
 
 // ---- Public ----
 router.get('/health', (_req, res) => res.json({ success: true, status: 'ok', uptime: process.uptime() }));
-router.get('/track/:trackingId', trackShipment);
+// Public tracking: enough for a page that refreshes every 15 s, far too slow for guessing IDs.
+const trackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many tracking requests from this address. Please wait a minute and try again.' },
+});
+router.get('/track/:trackingId', trackLimiter, trackShipment);
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
 router.post('/auth/login', loginLimiter, auth.login);

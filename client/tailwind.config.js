@@ -1,20 +1,27 @@
-/** Palette taken from road furniture: asphalt, lane-marking yellow, concrete. */
+/** Warm "delivery" palette: cream paper, sunflower yellow trucks, ember charts, ink text. */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
-        asphalt: { 950: '#12181F', 900: '#1B2430', 800: '#26323F', 700: '#34424F', 600: '#4A5A69' },
-        lane: { DEFAULT: '#F2B705', dark: '#C99700', soft: '#FFF4CC' },
-        concrete: { DEFAULT: '#EEF0EC', dark: '#DDE1DA' },
-        go: '#1F9D55',
-        stop: '#D64545',
-        steel: '#5B6B7B',
+        cream: { DEFAULT: '#F6F2EB', dark: '#ECE6DB', deep: '#DED5C4' },
+        ink: { DEFAULT: '#17191D', soft: '#6F737B', mute: '#A2A6AE' },
+        sun: { DEFAULT: '#F7B500', dark: '#D99E00', soft: '#FFF4CF' },
+        ember: { DEFAULT: '#E8553F', soft: '#FDEAE6' },
+        berry: { DEFAULT: '#D14A8E', soft: '#FBE4EF' },
+        leaf: { DEFAULT: '#1F9D55', soft: '#E3F5EA' },
+        sky: { DEFAULT: '#2563EB', soft: '#E4ECFD' },
+        line: '#ECE7DE',
       },
       fontFamily: {
-        sans: ['Barlow', 'system-ui', 'sans-serif'],
-        display: ['"Barlow Semi Condensed"', 'Barlow', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Outfit', 'Inter', 'system-ui', 'sans-serif'],
       },
+      boxShadow: {
+        card: '0 1px 2px rgba(23,25,29,.04), 0 10px 30px -16px rgba(23,25,29,.14)',
+        float: '0 16px 40px -12px rgba(23,25,29,.28)',
+      },
+      borderRadius: { '4xl': '28px' },
     },
   },
   plugins: [],

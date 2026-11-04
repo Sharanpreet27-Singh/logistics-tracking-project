@@ -10,7 +10,12 @@ export function crud({ Model, schema, searchFields = [], filters = [], populate 
       const page = Math.max(1, Number(req.query.page) || 1);
       const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
       const query = {};
-      for (const f of filters) if (typeof req.query[f] === 'string' && req.query[f]) query[f] = req.query[f];
+      for (const f of filters) {
+        const value = req.query[f];
+        if (typeof value !== 'string' || !value) continue;
+        // "status=Assigned,In Transit" matches any of the listed values
+        query[f] = value.includes(',') ? { $in: value.split(',').map((s) => s.trim()).filter(Boolean) } : value;
+      }
       if (typeof req.query.search === 'string' && req.query.search && searchFields.length) {
         const rx = new RegExp(escapeRegex(req.query.search), 'i');
         query.$or = searchFields.map((f) => ({ [f]: rx }));

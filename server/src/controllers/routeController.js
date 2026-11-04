@@ -15,6 +15,6 @@ export const shipmentRoute = asyncHandler(async (req, res) => {
 
 export const optimizeRoute = asyncHandler(async (req, res) => {
   const { start, stops } = optimizeSchema.parse(req.body);
-  const { ordered, totalKm } = optimizeStops(start, stops);
-  res.json({ success: true, data: { start, ordered, totalKm, durationMin: estimateMinutes(totalKm) } });
+  const { ordered, totalKm, exact } = optimizeStops(start, stops);
+  res.json({ success: true, data: { start, ordered, totalKm, durationMin: estimateMinutes(totalKm), exact } });
 });

@@ -6,12 +6,14 @@ import { Driver } from '../models/Driver.js';
 import { Shipment } from '../models/Shipment.js';
 import { Alert } from '../models/Alert.js';
 import { roadDistanceKm, estimateMinutes } from '../utils/geo.js';
+import { makeTrackingId } from '../utils/trackingId.js';
 import { city } from './cities.js';
 
-const days = (n) => new Date(Date.now() - n * 86400000);
-const hours = (n) => new Date(Date.now() + n * 3600000);
-let seq = 1000;
-const trackingId = () => `SHP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(++seq).padStart(4, '0')}`;
+const MIN = 60000;
+const HOUR = 60 * MIN;
+const DAY = 24 * HOUR;
+const ago = (ms) => new Date(Date.now() - ms);
+const after = (date, ms) => new Date(date.getTime() + ms);
 
 await connectDB();
 await Promise.all([User, Vehicle, Driver, Shipment, Alert].map((M) => M.deleteMany({})));
@@ -38,8 +40,8 @@ const vehicles = await Vehicle.create(
   vehicleData.map(([registrationNo, type, make, model, capacityKg], i) => ({
     registrationNo, type, make, model, capacityKg,
     fuelType: i === 3 ? 'CNG' : 'Diesel',
-    nextServiceDate: hours(24 * (15 + i * 9)),
-    insuranceExpiry: hours(24 * (i === 2 ? 12 : 120 + i * 20)),
+    nextServiceDate: after(new Date(), DAY * (15 + i * 9)),
+    insuranceExpiry: after(new Date(), DAY * (i === 2 ? 12 : 120 + i * 20)),
     status: i === 7 ? 'maintenance' : 'idle',
     lastUpdated: new Date(),
   }))
@@ -56,7 +58,7 @@ const drivers = await Driver.create(
     name, phone, rating,
     email: `${name.split(' ')[0].toLowerCase()}@fleet.com`,
     licenseNo: `HR0620200${1000 + i}`,
-    licenseExpiry: hours(24 * (i === 5 ? 20 : 300 + i * 30)),
+    licenseExpiry: after(new Date(), DAY * (i === 5 ? 20 : 300 + i * 30)),
     status: i === 6 ? 'off-duty' : 'available',
   }))
 );
@@ -67,22 +69,38 @@ const pairs = [
   ['Panipat', 'Delhi'], ['Delhi', 'Jaipur'], ['Karnal', 'Chandigarh'], ['Ludhiana', 'Amritsar'], ['Gurugram', 'Agra'],
   ['Meerut', 'Panipat'], ['Chandigarh', 'Delhi'], ['Jaipur', 'Agra'], ['Amritsar', 'Karnal'], ['Delhi', 'Meerut'],
 ];
+// Weights that every vehicle except the vans can carry, so the demo assignments are realistic.
+const weights = [900, 1200, 450, 300, 15000, 1100, 600, 1500, 800, 250];
 
-function build(i, status, extra = {}) {
+/**
+ * Builds a shipment whose dates make sense: created first, each timeline step after the previous
+ * one, delivered last. `createdAt` drives the tracking ID date and the ETA.
+ */
+function build(i, status, { createdAt, steps = ['Created'], vehicle, driver, deliveredAt, late = false, failNote } = {}) {
   const [a, b] = pairs[i % pairs.length];
   const pickup = city(a);
   const delivery = city(b);
   const distanceKm = roadDistanceKm(pickup, delivery);
+  const transitMs = estimateMinutes(distanceKm) * MIN;
+  const stepGap = [0, 10 * MIN, 40 * MIN, 50 * MIN]; // Created, Assigned, Picked Up, In Transit offsets
+  const timeline = steps.map((st, k) => {
+    const note = st === 'Created' ? 'Shipment created' : st === 'Assigned' && vehicle ? `${vehicle.registrationNo} / ${driver.name}` : st === 'Failed' ? failNote : undefined;
+    const at = st === 'Delivered' ? deliveredAt : st === 'Failed' ? after(createdAt, stepGap[3] + transitMs * 0.7) : after(createdAt, stepGap[k] ?? stepGap[3]);
+    return { status: st, note, at };
+  });
+  // Promised ETA: created + handling + transit. Late deliveries are seeded by delivering after it.
+  let eta = after(createdAt, HOUR + transitMs);
+  if (deliveredAt) eta = late ? new Date(deliveredAt.getTime() - 45 * MIN) : new Date(deliveredAt.getTime() + 60 * MIN);
   return {
-    trackingId: trackingId(),
+    trackingId: makeTrackingId(createdAt),
     customerName: customers[i % customers.length],
     customerPhone: `98000000${10 + i}`,
     pickup, delivery, distanceKm,
-    weightKg: 200 + i * 350,
-    status,
-    eta: hours(estimateMinutes(distanceKm) / 60 + 1),
-    timeline: [{ status: 'Created', note: 'Shipment created' }],
-    ...extra,
+    weightKg: weights[i % weights.length],
+    status, eta, timeline, createdAt, updatedAt: timeline.at(-1).at,
+    vehicle: vehicle?._id ?? null,
+    driver: driver?._id ?? null,
+    deliveredAt,
   };
 }
 
@@ -92,15 +110,7 @@ const shipments = [];
 for (let i = 0; i < 4; i++) {
   const v = vehicles[i];
   const d = drivers[i];
-  const s = build(i, 'In Transit', {
-    vehicle: v._id, driver: d._id,
-    timeline: [
-      { status: 'Created', note: 'Shipment created' },
-      { status: 'Assigned', note: `${v.registrationNo} / ${d.name}` },
-      { status: 'Picked Up' },
-      { status: 'In Transit' },
-    ],
-  });
+  const s = build(i, 'In Transit', { createdAt: ago(HOUR * (2 + i)), steps: ['Created', 'Assigned', 'Picked Up', 'In Transit'], vehicle: v, driver: d });
   const f = 0.2 + i * 0.12;
   v.location = { lat: s.pickup.lat + (s.delivery.lat - s.pickup.lat) * f, lng: s.pickup.lng + (s.delivery.lng - s.pickup.lng) * f };
   v.status = 'moving';
@@ -111,39 +121,35 @@ for (let i = 0; i < 4; i++) {
   shipments.push(s);
 }
 
-// 1 assigned, waiting for pickup
+// 1 assigned, waiting for pickup: the vehicle is booked but not moving yet
 {
   const v = vehicles[4], d = drivers[4];
-  const s = build(4, 'Assigned', {
-    vehicle: v._id, driver: d._id,
-    timeline: [{ status: 'Created', note: 'Shipment created' }, { status: 'Assigned', note: `${v.registrationNo} / ${d.name}` }],
-  });
+  const s = build(4, 'Assigned', { createdAt: ago(HOUR), steps: ['Created', 'Assigned'], vehicle: v, driver: d });
   v.location = { lat: s.pickup.lat, lng: s.pickup.lng };
+  v.status = 'booked';
   v.assignedDriver = d._id;
   d.status = 'on-trip';
   d.assignedVehicle = v._id;
   shipments.push(s);
 }
 
-// 2 waiting for assignment, 1 failed
-shipments.push(build(5, 'Created'), build(6, 'Created'));
+// 2 waiting for assignment, 1 failed yesterday
+shipments.push(build(5, 'Created', { createdAt: ago(40 * MIN) }), build(6, 'Created', { createdAt: ago(25 * MIN) }));
 shipments.push(build(7, 'Failed', {
-  vehicle: vehicles[5]._id, driver: drivers[5]._id,
-  timeline: [{ status: 'Created' }, { status: 'Assigned' }, { status: 'Picked Up' }, { status: 'In Transit' }, { status: 'Failed', note: 'Consignee unavailable' }],
+  createdAt: ago(DAY + 3 * HOUR), steps: ['Created', 'Assigned', 'Picked Up', 'In Transit', 'Failed'],
+  vehicle: vehicles[5], driver: drivers[5], failNote: 'Consignee unavailable',
 }));
 
-// 12 delivered over the last 7 days (some late so the on-time rate is realistic)
+// 12 delivered over the last 7 days, including today (some late so the on-time rate is realistic)
 for (let i = 0; i < 12; i++) {
-  const ago = i % 7;
-  const base = build(i + 8, 'Delivered', {
-    vehicle: vehicles[i % 7]._id,
-    driver: drivers[i % 6]._id,
-    timeline: [{ status: 'Created' }, { status: 'Assigned' }, { status: 'Picked Up' }, { status: 'In Transit' }, { status: 'Delivered' }],
-  });
-  const deliveredAt = days(ago + 0.05 * i);
-  base.deliveredAt = deliveredAt;
-  base.eta = i % 4 === 3 ? new Date(deliveredAt.getTime() - 45 * 60000) : new Date(deliveredAt.getTime() + 60 * 60000);
-  shipments.push(base);
+  const deliveredAt = ago(DAY * (i % 7) + HOUR * (1 + (i % 5) * 2));
+  const distanceKm = roadDistanceKm(city(pairs[(i + 8) % pairs.length][0]), city(pairs[(i + 8) % pairs.length][1]));
+  const createdAt = new Date(deliveredAt.getTime() - estimateMinutes(distanceKm) * MIN - 2 * HOUR);
+  shipments.push(build(i + 8, 'Delivered', {
+    createdAt, deliveredAt, late: i % 4 === 3,
+    steps: ['Created', 'Assigned', 'Picked Up', 'In Transit', 'Delivered'],
+    vehicle: vehicles[i % 7], driver: drivers[i % 6],
+  }));
 }
 
 await Promise.all([...vehicles.map((v) => v.save()), ...drivers.map((d) => d.save())]);

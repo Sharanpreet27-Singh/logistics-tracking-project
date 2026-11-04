@@ -2,7 +2,9 @@ import { useEffect, useState, useCallback } from 'react';
 import api from '../services/api.js';
 import { getSocket } from '../services/socket.js';
 
-/** Loads vehicles + in-transit shipments and keeps vehicle positions live via Socket.IO. */
+const ACTIVE = encodeURIComponent('Assigned,Picked Up,In Transit');
+
+/** Loads vehicles + every active shipment (booked or moving) and keeps vehicle positions live via Socket.IO. */
 export function useFleetTracking() {
   const [vehicles, setVehicles] = useState([]);
   const [shipments, setShipments] = useState([]);
@@ -10,7 +12,7 @@ export function useFleetTracking() {
   const [connected, setConnected] = useState(false);
 
   const load = useCallback(async () => {
-    const [v, s] = await Promise.all([api.get('/vehicles?limit=200'), api.get('/shipments?status=In%20Transit&limit=100')]);
+    const [v, s] = await Promise.all([api.get('/vehicles?limit=200'), api.get(`/shipments?status=${ACTIVE}&limit=100`)]);
     setVehicles(v.data.data);
     setShipments(s.data.data);
     setLoading(false);

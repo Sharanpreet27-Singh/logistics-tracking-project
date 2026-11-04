@@ -40,26 +40,57 @@ export function moveToward(from, to, stepKm) {
 
 export const estimateMinutes = (km, avgSpeedKmh = 45) => Math.round((km / avgSpeedKmh) * 60);
 
-/** Nearest-neighbour ordering of stops starting from `start`. */
+const EXACT_LIMIT = 8; // 8! = 40,320 orders, still instant
+
+/**
+ * Orders `stops` from `start` to minimise total driving. Exact (every order tried) for up to
+ * EXACT_LIMIT stops; nearest-neighbour followed by 2-opt improvement beyond that.
+ * Returns { ordered, totalKm, exact }.
+ */
 export function optimizeStops(start, stops) {
-  const remaining = [...stops];
-  const ordered = [];
-  let current = start;
-  let total = 0;
-  while (remaining.length) {
-    let bestIdx = 0;
-    let best = Infinity;
-    remaining.forEach((s, i) => {
-      const d = haversineKm(current, s);
-      if (d < best) {
-        best = d;
-        bestIdx = i;
+  const pts = [start, ...stops];
+  const D = pts.map((a) => pts.map((b) => haversineKm(a, b)));
+  const cost = (order) => {
+    let total = 0;
+    let cur = 0;
+    for (const i of order) { total += D[cur][i]; cur = i; }
+    return total;
+  };
+  const idx = stops.map((_, i) => i + 1);
+  let best;
+
+  if (stops.length <= EXACT_LIMIT) {
+    const walk = (prefix, rest, soFar) => {
+      if (best && soFar >= best.cost) return; // cannot beat the best order found so far
+      if (!rest.length) { best = { order: prefix, cost: soFar }; return; }
+      const cur = prefix.length ? prefix[prefix.length - 1] : 0;
+      for (let i = 0; i < rest.length; i++) {
+        walk([...prefix, rest[i]], rest.filter((_, j) => j !== i), soFar + D[cur][rest[i]]);
       }
-    });
-    const [next] = remaining.splice(bestIdx, 1);
-    total += best;
-    ordered.push(next);
-    current = next;
+    };
+    walk([], idx, 0);
+  } else {
+    let order = [];
+    const remaining = [...idx];
+    let cur = 0;
+    while (remaining.length) {
+      let bi = 0;
+      for (let i = 1; i < remaining.length; i++) if (D[cur][remaining[i]] < D[cur][remaining[bi]]) bi = i;
+      cur = remaining.splice(bi, 1)[0];
+      order.push(cur);
+    }
+    let improved = true;
+    while (improved) {
+      improved = false;
+      for (let i = 0; i < order.length - 1; i++) {
+        for (let j = i + 1; j < order.length; j++) {
+          const candidate = [...order.slice(0, i), ...order.slice(i, j + 1).reverse(), ...order.slice(j + 1)];
+          if (cost(candidate) < cost(order) - 1e-9) { order = candidate; improved = true; }
+        }
+      }
+    }
+    best = { order, cost: cost(order) };
   }
-  return { ordered, totalKm: Math.round(total * 1.25 * 10) / 10 };
+
+  return { ordered: best.order.map((i) => pts[i]), totalKm: Math.round(best.cost * 1.25 * 10) / 10, exact: stops.length <= EXACT_LIMIT };
 }

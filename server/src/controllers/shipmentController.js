@@ -1,7 +1,7 @@
 import { Shipment } from '../models/Shipment.js';
 import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../models/Driver.js';
-import { TRANSITIONS, TERMINAL } from '../models/constants.js';
+import { TRANSITIONS, TERMINAL, ACTIVE_SHIPMENT } from '../models/constants.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { generateTrackingId } from '../utils/trackingId.js';
@@ -12,9 +12,13 @@ import { createAlert } from '../services/alertService.js';
 
 const HANDLING_MINUTES = 60;
 const populated = (id) => Shipment.findById(id).populate('vehicle driver').lean();
+const kg = (n) => `${Number(n).toLocaleString('en-IN')} kg`;
 
 export const createShipment = asyncHandler(async (req, res) => {
   const body = shipmentCreateSchema.parse(req.body);
+  if (body.pickup.address.toLowerCase() === body.delivery.address.toLowerCase()) {
+    throw new ApiError(400, 'Pickup and delivery cities must be different');
+  }
   const distanceKm = roadDistanceKm(body.pickup, body.delivery);
   const shipment = await Shipment.create({
     ...body,
@@ -39,20 +43,43 @@ export const assignShipment = asyncHandler(async (req, res) => {
   if (!vehicle) throw new ApiError(404, 'Vehicle not found');
   if (!driver) throw new ApiError(404, 'Driver not found');
   if (!['Created', 'Assigned'].includes(shipment.status)) throw new ApiError(400, `Cannot assign a ${shipment.status} shipment`);
-  if (vehicle.status === 'maintenance') throw new ApiError(400, 'Vehicle is under maintenance');
-  if (driver.status === 'off-duty') throw new ApiError(400, 'Driver is off duty');
+  if (vehicle.status === 'maintenance') throw new ApiError(400, `${vehicle.registrationNo} is under maintenance`);
+  if (driver.status === 'off-duty') throw new ApiError(400, `${driver.name} is off duty`);
+  if (vehicle.capacityKg < shipment.weightKg) {
+    throw new ApiError(400, `${vehicle.registrationNo} can carry ${kg(vehicle.capacityKg)} but this shipment weighs ${kg(shipment.weightKg)}`);
+  }
+
+  // A vehicle or driver can only be on one active shipment at a time.
+  const [vehicleBusy, driverBusy] = await Promise.all([
+    Shipment.findOne({ _id: { $ne: shipment._id }, vehicle: vehicle._id, status: { $in: ACTIVE_SHIPMENT } }).select('trackingId').lean(),
+    Shipment.findOne({ _id: { $ne: shipment._id }, driver: driver._id, status: { $in: ACTIVE_SHIPMENT } }).select('trackingId').lean(),
+  ]);
+  if (vehicleBusy) throw new ApiError(400, `${vehicle.registrationNo} is already booked on ${vehicleBusy.trackingId}`);
+  if (driverBusy) throw new ApiError(400, `${driver.name} is already driving ${driverBusy.trackingId}`);
+
+  // Reassignment: free whoever was booked before.
+  if (shipment.vehicle && String(shipment.vehicle) !== String(vehicle._id)) {
+    await Vehicle.findByIdAndUpdate(shipment.vehicle, { status: 'idle', assignedDriver: null });
+    emit('vehicle:status', { vehicleId: String(shipment.vehicle), status: 'idle' });
+  }
+  if (shipment.driver && String(shipment.driver) !== String(driver._id)) {
+    await Driver.findByIdAndUpdate(shipment.driver, { status: 'available', assignedVehicle: null });
+  }
 
   shipment.vehicle = vehicle._id;
   shipment.driver = driver._id;
   shipment.status = 'Assigned';
   shipment.timeline.push({ status: 'Assigned', note: `${vehicle.registrationNo} / ${driver.name}` });
   vehicle.assignedDriver = driver._id;
+  vehicle.status = 'booked';
+  vehicle.speed = 0;
   vehicle.location = { lat: shipment.pickup.lat, lng: shipment.pickup.lng };
   driver.assignedVehicle = vehicle._id;
   driver.status = 'on-trip';
   await Promise.all([shipment.save(), vehicle.save(), driver.save()]);
 
   emit('shipment:update', { shipmentId: shipment.id, status: shipment.status });
+  emit('vehicle:status', { vehicleId: vehicle.id, status: vehicle.status });
   res.json({ success: true, data: await populated(shipment.id) });
 });
 

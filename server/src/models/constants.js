@@ -1,7 +1,8 @@
 export const ROLES = ['admin', 'manager', 'dispatcher', 'driver'];
 export const VEHICLE_TYPES = ['Truck', 'Mini Truck', 'Van', 'Trailer', 'Bike'];
 export const FUEL_TYPES = ['Diesel', 'Petrol', 'CNG', 'Electric'];
-export const VEHICLE_STATUSES = ['moving', 'idle', 'stopped', 'offline', 'maintenance'];
+// "booked" = assigned to a shipment that has not started moving yet (Assigned / Picked Up).
+export const VEHICLE_STATUSES = ['moving', 'booked', 'idle', 'stopped', 'offline', 'maintenance'];
 export const DRIVER_STATUSES = ['available', 'on-trip', 'off-duty'];
 export const SHIPMENT_STATUSES = ['Created', 'Assigned', 'Picked Up', 'In Transit', 'Delivered', 'Failed', 'Cancelled'];
 export const ALERT_TYPES = ['speeding', 'delayed', 'delivery_failed', 'idle', 'maintenance', 'document_expiry'];

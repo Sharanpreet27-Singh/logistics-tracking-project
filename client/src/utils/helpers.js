@@ -1,4 +1,4 @@
-import { format, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, differenceInMinutes } from 'date-fns';
 
 export const CITIES = [
   { name: 'Panipat', lat: 29.3909, lng: 76.9635 },
@@ -14,11 +14,18 @@ export const CITIES = [
 ];
 
 export const SHIPMENT_STATUSES = ['Created', 'Assigned', 'Picked Up', 'In Transit', 'Delivered', 'Failed', 'Cancelled'];
+export const AVG_SPEED_KMH = 55;
+
+// Mirrors the server's phone rule: digits with an optional + prefix; spaces, dashes, dots and brackets allowed.
+export const PHONE_PATTERN = '\\+?[0-9][0-9 ().-]{5,24}';
+export const PHONE_HELP = 'Digits only, 7 to 15 of them; an optional + prefix, spaces and dashes are fine';
 
 export const formatDate = (d) => (d ? format(new Date(d), 'dd MMM yyyy') : '-');
 export const formatDateTime = (d) => (d ? format(new Date(d), 'dd MMM, HH:mm') : '-');
+export const formatTime = (d) => (d ? format(new Date(d), 'hh:mm a') : '-');
 export const timeAgo = (d) => (d ? formatDistanceToNow(new Date(d), { addSuffix: true }) : '-');
 export const toInputDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+export const formatKm = (km) => `${Math.round(km).toLocaleString()} km`;
 
 const rad = (x) => (x * Math.PI) / 180;
 export function haversineKm(a, b) {
@@ -27,10 +34,28 @@ export function haversineKm(a, b) {
 }
 
 export const formatDuration = (minutes) => {
+  if (minutes == null || Number.isNaN(minutes)) return '-';
   const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
   return h ? `${h}h ${m}m` : `${m}m`;
 };
+
+/** Where a vehicle is along its trip: remaining km, minutes left at average speed and 0-1 progress. */
+export function tripProgress(vehicleLocation, pickup, delivery) {
+  const total = haversineKm(pickup, delivery) * 1.25 || 1;
+  const remainingKm = haversineKm(vehicleLocation, delivery) * 1.25;
+  const progress = Math.min(1, Math.max(0, 1 - remainingKm / total));
+  return { totalKm: total, remainingKm, minutesLeft: (remainingKm / AVG_SPEED_KMH) * 60, progress };
+}
+
+/** Compares the projected arrival with the promised ETA. Returns {label, good}. */
+export function scheduleStatus(eta, minutesLeft) {
+  if (!eta) return { label: 'No ETA set', good: true };
+  const projected = new Date(Date.now() + minutesLeft * 60000);
+  const diff = differenceInMinutes(new Date(eta), projected);
+  if (Math.abs(diff) < 5) return { label: 'On time', good: true };
+  return diff > 0 ? { label: `${formatDuration(diff)} early`, good: true } : { label: `${formatDuration(-diff)} late`, good: false };
+}
 
 export function downloadCSV(filename, rows) {
   if (!rows.length) return;

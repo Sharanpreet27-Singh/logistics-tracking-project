@@ -1,54 +1,74 @@
-# 🚚 Real-Time Logistics & Fleet Tracking System
+# 🚚 FleetTrack — Real-Time Logistics & Fleet Tracking System
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3-38BDF8?logo=tailwindcss&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-20_LTS-339933?logo=nodedotjs&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?logo=mongodb&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=nodedotjs&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-6--8-47A248?logo=mongodb&logoColor=white)
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?logo=socketdotio&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-optional-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 A full-stack, real-time logistics and fleet management platform. Dispatchers watch vehicles move on a live map, create and assign shipments, and follow every delivery from pickup to drop-off. Managers get dashboards and reports. Customers can track a parcel on a public page without logging in.
+
+The UI follows a warm "delivery app" look: cream background, yellow accents, a white sidebar, a shipping-detail panel beside a large map, and plain-language help on every screen.
 
 ---
 
 ## 📑 Table of Contents
 
 1. [Quick Start](#-quick-start)
-2. [Features](#-features)
-3. [System Architecture](#-system-architecture)
-4. [Technology Stack](#-technology-stack)
-5. [Project Structure](#-project-structure)
-6. [Data Models](#-data-models)
-7. [REST API Reference](#-rest-api-reference)
-8. [Real-Time Events](#-real-time-events-socketio)
-9. [Roles & Permissions](#-roles--permissions)
-10. [Configuration](#-configuration)
-11. [Running with Docker](#-running-with-docker)
-12. [GPS Simulator](#-gps-simulator)
-13. [Testing](#-testing)
-14. [Security](#-security)
-15. [CI/CD & Deployment](#️-cicd--deployment)
-16. [Roadmap](#-roadmap)
-17. [Contributing](#-contributing) · [License](#-license)
+2. [Troubleshooting](#-troubleshooting)
+3. [Features](#-features)
+4. [System Architecture](#-system-architecture)
+5. [Technology Stack](#-technology-stack)
+6. [Project Structure](#-project-structure)
+7. [Data Models](#-data-models)
+8. [REST API Reference](#-rest-api-reference)
+9. [Real-Time Events](#-real-time-events-socketio)
+10. [Roles & Permissions](#-roles--permissions)
+11. [Configuration](#-configuration)
+12. [Running with Docker](#-running-with-docker)
+13. [GPS Simulator](#-gps-simulator)
+14. [Testing](#-testing)
+15. [Security](#-security)
+16. [CI/CD & Deployment](#️-cicd--deployment)
+17. [Roadmap](#-roadmap)
+18. [Contributing](#-contributing) · [License](#-license)
 
 ---
 
 ## 🚀 Quick Start
 
-**Prerequisites:** Node.js 18+ (20 LTS recommended), npm, and MongoDB 6/7 running locally (or a MongoDB Atlas URI).
+**Prerequisites:** Node.js 18 or newer (tested on 20 and 24), npm, and MongoDB 6, 7 or 8 running locally (or a MongoDB Atlas URI). On Windows the MongoDB installer sets it up as a service that starts with the machine, so nothing else is needed. Docker is optional.
+
+### Option A: one command from the repo root (recommended)
+
+```bash
+npm install          # root launcher tools (concurrently, wait-on)
+npm run setup        # installs server/ and client/ dependencies
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+npm run seed         # creates demo users, vehicles, drivers and shipments (wipes the database!)
+npm run dev:all      # API on :5000, client on :5173, and the GPS simulator, all in one terminal
+```
+
+Other root scripts: `npm run dev` (API + client, no simulator), `npm run simulate`, `npm test` (server tests) and `npm run build` (client production build). Press `Ctrl+C` once to stop everything.
+
+### Option B: three terminals
 
 ```bash
 # 1. Backend
 cd server
 npm install
+cp .env.example .env
 npm run seed        # creates demo users, vehicles, drivers and shipments
 npm run dev         # API + sockets on http://localhost:5000
 
 # 2. Frontend (new terminal)
 cd client
 npm install
+cp .env.example .env
 npm run dev         # app on http://localhost:5173
 
 # 3. Make the vehicles move (new terminal)
@@ -56,7 +76,9 @@ cd server
 npm run simulate
 ```
 
-Open **http://localhost:5173** and sign in:
+### Sign in
+
+Open **http://localhost:5173**. The login page has one-click demo-account chips, or type:
 
 | Role | Email | Password |
 |---|---|---|
@@ -64,9 +86,22 @@ Open **http://localhost:5173** and sign in:
 | Manager | `manager@fleet.com` | `Manager@123` |
 | Dispatcher | `dispatcher@fleet.com` | `Dispatch@123` |
 
-Then open **Live tracking** to see four seeded trucks driving toward their destinations. The public tracking page is at `/track` (try a tracking ID from the Shipments page).
+Then open **Live tracking** to see the four seeded trucks driving toward their destinations. At the simulator's default speed-up they arrive within a few minutes; after that, create a shipment on the **Shipments** page, assign a vehicle, and press **Start transit** to put a new truck on the road. The public tracking page is at `/track` (try any tracking ID from the Shipments page).
 
 > ⚠️ The demo accounts are for development only. Never run `npm run seed` against a production database (it wipes all collections) and remove the demo users before going live.
+
+---
+
+## 🔧 Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| Red overlay in the browser: *"The `bg-cream` class does not exist"* | The Vite dev server was started before `client/tailwind.config.js` changed and kept the old config in memory. Stop the client (`Ctrl+C`) and start it again. |
+| `Port 5173 is already in use` | A previous dev server is still running. Close that terminal, or on Windows run `netstat -ano \| findstr :5173` and then `taskkill /PID <pid> /F`. |
+| API prints `MongooseServerSelectionError` | MongoDB is not running or `MONGO_URI` is wrong. On Windows run `sc query MongoDB`; start it with `net start MongoDB`. |
+| Simulator says `No In Transit shipments yet` | Every shipment has been delivered. With `npm run dev:all` the simulator books new trips by itself within 10 seconds; otherwise create and dispatch one in the UI, or run `npm run seed` to reset the demo data. |
+| Map tiles are blank | Tiles come from `server.arcgisonline.com` (Esri) and need internet access. To use another provider, set `VITE_MAP_TILE_URL` in `client/.env`. |
+| Top bar shows **Reconnecting** | The client lost its socket to the API. Make sure the API is running on port 5000 and that `client/.env` points to it. |
 
 ---
 
@@ -74,52 +109,55 @@ Then open **Live tracking** to see four seeded trucks driving toward their desti
 
 ### 📊 Dashboard
 - Vehicle KPIs: total, moving, idle/stopped, in maintenance.
-- Shipment KPIs: ongoing, waiting for assignment, delivered, on-time rate, fleet utilization.
-- Charts (Recharts): deliveries in the last 7 days, shipments by status.
-- Recent shipments table. KPIs refresh live when shipments or vehicle status change.
+- Shipment KPIs: ongoing, waiting for assignment, delivered this week, on-time rate, fleet utilization, each with a sparkline and a "vs last week" line.
+- Charts (Recharts): deliveries in the last 7 days (bars + trend line), fleet status and shipments by status as labelled stacked bars.
+- Featured shipment card with a mini map and a checkbox-style timeline, a recent shipments table with CSV export, and a live activity feed of departures, deliveries and alerts. KPIs count up or down live when shipments or vehicle status change.
 
 ### 📍 Live Fleet Tracking
-- Interactive OpenStreetMap map (React Leaflet) with status-colored vehicle markers.
+- Full-height interactive map (React Leaflet on Esri street tiles, with a Map / Satellite switch on every map) with white truck markers coloured by status.
 - Positions update in real time over Socket.IO (no polling).
-- Dashed route line from each in-transit vehicle to its destination, with distance and ETA.
-- Search by plate or driver name, filter by status, click a vehicle to focus it.
-- Connection indicator ("Live updates on" / "Reconnecting").
+- **Shipping detail** panel for the selected vehicle: driver, time left, distance to go, ETA, a segmented progress bar, "on schedule" check, current speed, and a timeline of the trip.
+- Floating search (plate or driver name) and status filter over the map; a scrollable strip of vehicle cards along the bottom. Click a card or marker to focus it.
+- Connection indicator in the top bar ("Live" / "Reconnecting").
 
 ### 🚛 Vehicle Management
-- Add, edit, delete, search and filter vehicles.
-- Registration, type, make/model, capacity, fuel type, status, assigned driver.
-- Next service date and insurance expiry.
+- Add, edit, delete, search and filter vehicles; export the list as CSV.
+- Registration, type, make/model, capacity, fuel type, status (`moving`, `booked`, `idle`, `stopped`, `offline`, `maintenance`), assigned driver.
+- Next service date and insurance expiry, highlighted when due within 30 days.
 
 ### 👨‍✈️ Driver Management
-- Driver profiles with phone, email, license number and expiry.
-- Availability status (`available`, `on-trip`, `off-duty`), assigned vehicle, rating.
+- Driver profiles with phone, email, license number and expiry (highlighted when due within 30 days).
+- Availability status (`available`, `on-trip`, `off-duty`), assigned vehicle, rating; CSV export.
 
 ### 📦 Shipment Management
-- Create shipments with an auto-generated tracking ID (`SHP-YYYYMMDD-NNNN`).
-- Distance and ETA calculated automatically.
-- Assign an idle vehicle and an available driver in one dialog.
-- Guided status lifecycle: `Created → Assigned → Picked Up → In Transit → Delivered` (or `Failed` / `Cancelled`). Invalid jumps are rejected by the API.
-- Full status timeline per shipment.
-- **Public tracking page** for customers (`/track/:trackingId`), showing only customer-safe fields.
+- Create shipments with an auto-generated tracking ID (`SHP-YYYYMMDD-XXXXXX`, six random characters so IDs cannot be guessed); distance and ETA are calculated automatically. Customer names and phone numbers are validated.
+- Assign an idle vehicle and an available driver in one dialog. Vehicles rated below the shipment weight are not offered, and the API rejects them too. An assigned vehicle becomes **booked** (and **moving** once in transit) so it cannot be double-booked.
+- Guided status lifecycle: `Created → Assigned → Picked Up → In Transit → Delivered` (or `Failed` / `Cancelled`). Buttons are named after the action ("Start transit", "Mark delivered"), and invalid jumps are rejected by the API.
+- A "How it works" guide explains each step, and every status pill has a plain-language tooltip.
+- Full status timeline per shipment, status tabs, global search from the top bar, CSV export.
+- **Public tracking page** for customers (`/track/:trackingId`): map with the live truck position, a step strip, the driver's first name and vehicle plate, pickup/delivery details and the timeline. It refreshes itself every 15 seconds and shows only customer-safe fields (no customer details, no internal notes, driver first name only). The endpoint is rate limited to 20 requests per minute per address.
 
 ### 🗺️ Route Management
 - Source, destination, distance and driving-time estimate for every shipment, drawn on a map.
-- Multi-stop planner that orders stops with a nearest-neighbour heuristic.
+- Multi-stop planner that finds the shortest visiting order: exact for up to 8 stops, nearest-neighbour plus 2-opt beyond that.
 
 ### 📈 Reports & Analytics
-- Deliveries per day (7/30/90 days), vehicle utilization, driver performance, on-time rate.
+- Deliveries per day (7/30/90 days, bucketed in the fleet's local time zone), vehicle utilization, driver performance, on-time rate.
 - CSV export for each table; print or save as PDF through the browser.
 
 ### 🔔 Alerts
 - Automatic alerts for speeding (over 80 km/h, de-duplicated per vehicle) and failed deliveries.
-- Real-time toast + unread counter in the sidebar, alerts page with mark-as-read.
+- Real-time toast + unread counter in the top bar; alerts page with mark-as-read and a short note on why each alert type matters.
 
 ### 🔐 Authentication & Access Control
 - JWT access + refresh tokens; the client refreshes silently when the access token expires.
 - Role-based access control (admin, manager, dispatcher, driver) on every API route and in the UI.
 
 ### 🎨 UI
+- Design tokens in `client/tailwind.config.js` (cream, ink, sun, ember, leaf, sky, berry, line) with Inter and Outfit fonts.
+- Every page has a one-sentence subtitle saying what it is for; forms show required markers and helper text.
 - Responsive layout (sidebar collapses on mobile), loading and empty states, toast feedback, keyboard-visible focus, reduced-motion support.
+- Login hero with an animated vector globe drawn on a canvas (no extra dependency).
 
 ---
 
@@ -161,13 +199,14 @@ Request flow: `Route → authenticate/authorize → controller (zod-validated) �
 |---|---|
 | React 18 + Vite 5 | UI and build tooling |
 | JavaScript (ES2022), HTML5, CSS3 | Application code |
-| Tailwind CSS 3 | Styling |
+| Tailwind CSS 3 | Styling, design tokens, component classes in `index.css` |
 | React Router 6 | Routing, protected and lazy-loaded routes |
 | Axios | API client with token refresh interceptor |
 | Socket.IO client | Live vehicle and shipment updates |
-| React Leaflet + Leaflet | Interactive maps (OpenStreetMap tiles) |
+| React Leaflet + Leaflet | Interactive maps (Esri World Street Map + World Imagery tiles, no API key; custom provider via `VITE_MAP_TILE_URL`) |
 | Recharts | Dashboard and report charts |
 | React Hot Toast, Lucide React, date-fns | Notifications, icons, dates |
+| Google Fonts (Inter, Outfit) | Body and display typefaces |
 
 ### Backend (`server/`)
 | Technology | Purpose |
@@ -181,8 +220,10 @@ Request flow: `Route → authenticate/authorize → controller (zod-validated) �
 | Morgan | HTTP request logging |
 | node:test | Unit tests |
 
-### DevOps
-Docker and Docker Compose (MongoDB, API, Nginx-served client). Nginx proxies `/api` and `/socket.io` to the API.
+### Tooling
+- Root `package.json` uses `concurrently` and `wait-on` to run the API, client and simulator from one terminal.
+- Docker and Docker Compose (MongoDB, API, Nginx-served client) are available but optional. Nginx proxies `/api` and `/socket.io` to the API.
+- GitHub Actions workflow in `.github/workflows/ci.yml`.
 
 ---
 
@@ -190,18 +231,20 @@ Docker and Docker Compose (MongoDB, API, Nginx-served client). Nginx proxies `/a
 
 ```text
 logistics-fleet-tracking/
+├── package.json          Root launcher: setup, seed, dev, dev:all, simulate, test, build
 ├── client/
 │   ├── src/
-│   │   ├── components/   Layout, CrudPage, MapView, Modal, StatusBadge, DashboardCard, Spinner
+│   │   ├── components/   Layout, CrudPage, MapView, Modal, StatusBadge, DashboardCard,
+│   │   │                 Sparkline, Timeline, PageHeader, Avatar, VectorGlobe, Spinner
 │   │   ├── pages/        Login, Dashboard, FleetTracking, Vehicles, Drivers, Shipments,
 │   │   │                 Routes, Reports, Alerts, TrackShipment (public), NotFound
 │   │   ├── context/      AuthContext.jsx
 │   │   ├── hooks/        useFleetTracking.js
 │   │   ├── routes/       ProtectedRoute.jsx
 │   │   ├── services/     api.js (Axios + refresh), socket.js
-│   │   ├── utils/        helpers.js
-│   │   ├── App.jsx · main.jsx · index.css
-│   ├── Dockerfile · nginx.conf · tailwind.config.js · vite.config.js · package.json
+│   │   ├── utils/        helpers.js (formatting, haversine, trip progress, CSV download)
+│   │   ├── App.jsx · main.jsx · index.css (design tokens + .btn/.card/.input classes)
+│   ├── Dockerfile · nginx.conf · tailwind.config.js · vite.config.js · package.json · .env.example
 │
 ├── server/
 │   ├── src/
@@ -210,7 +253,7 @@ logistics-fleet-tracking/
 │   │   ├── controllers/  auth, crud (generic), shipment, dashboard, report, route, alert, track
 │   │   ├── middleware/   auth (authenticate/authorize), errorHandler
 │   │   ├── routes/       index.js
-│   │   ├── sockets/      tracking.js, io.js
+│   │   ├── sockets/      tracking.js (location ingest, speeding alerts), io.js
 │   │   ├── services/     alertService.js
 │   │   ├── validators/   schemas.js (zod)
 │   │   ├── utils/        geo.js, trackingId.js, ApiError.js, asyncHandler.js
@@ -220,7 +263,7 @@ logistics-fleet-tracking/
 │   ├── tests/            geo.test.js
 │   ├── Dockerfile · package.json · .env.example
 │
-├── docker-compose.yml · .env.example · .gitignore · LICENSE · README.md
+├── .github/workflows/ci.yml · docker-compose.yml · .env.example · .gitignore · LICENSE · README.md
 ```
 
 ---
@@ -230,7 +273,7 @@ logistics-fleet-tracking/
 | Model | Key fields |
 |---|---|
 | **User** | name, email (unique), passwordHash, role, isActive, lastLogin |
-| **Vehicle** | registrationNo (unique), type, make, model, capacityKg, fuelType, status, assignedDriver, location `{lat,lng}`, speed, heading, lastUpdated, nextServiceDate, insuranceExpiry |
+| **Vehicle** | registrationNo (unique), type, make, model, capacityKg, fuelType, status (moving / booked / idle / stopped / offline / maintenance), assignedDriver, location `{lat,lng}`, speed, heading, lastUpdated, nextServiceDate, insuranceExpiry |
 | **Driver** | name, phone, email, licenseNo (unique), licenseExpiry, status, rating, assignedVehicle |
 | **Shipment** | trackingId (unique), customerName, customerPhone, pickup/delivery `{address,lat,lng}`, weightKg, status, vehicle, driver, distanceKm, eta, deliveredAt, timeline[] |
 | **Alert** | type, severity, message, vehicle, shipment, isRead |
@@ -246,7 +289,7 @@ Base URL: `/api/v1`. Everything except `/health`, `/auth/login`, `/auth/refresh`
 | System | GET | `/health` | Public |
 | Auth | POST | `/auth/login`, `/auth/refresh` | Public (rate limited) |
 | Auth | GET / POST | `/auth/me`, `/auth/logout` | Any user |
-| Public | GET | `/track/:trackingId` | Public |
+| Public | GET | `/track/:trackingId` | Public (rate limited: 20/min) |
 | Dashboard | GET | `/dashboard/stats` | Any user |
 | Vehicles | GET | `/vehicles`, `/vehicles/:id` | Any user |
 | Vehicles | POST / PUT | `/vehicles`, `/vehicles/:id` | Admin, manager |
@@ -261,7 +304,11 @@ Base URL: `/api/v1`. Everything except `/health`, `/auth/login`, `/auth/refresh`
 | Reports | GET | `/reports/deliveries`, `/reports/vehicles`, `/reports/drivers` | Admin, manager |
 | Alerts | GET / PATCH | `/alerts`, `/alerts/:id/read`, `/alerts/read-all` | Any user |
 
-List endpoints accept `page`, `limit` (max 200), `search` and a `status` filter (plus `type` for vehicles).
+List endpoints accept `page`, `limit` (max 200), `search` and a `status` filter (plus `type` for vehicles). A filter can list several values: `status=Assigned,In Transit`.
+
+`POST /shipments` expects `customerName`, optional `customerPhone`, `weightKg`, and `pickup` / `delivery` objects of the form `{ address, lat, lng }`. `PATCH /shipments/:id/assign` takes `{ vehicleId, driverId }`; `PATCH /shipments/:id/status` takes `{ status, note? }`.
+
+`GET /track/:trackingId` returns the tracking ID, status, from/to, pickup and delivery coordinates, weight, distance, ETA, the timeline, and, while the shipment is in transit, the live vehicle position, the vehicle plate and type, and the driver's first name. Customer name and phone are never returned.
 
 ```jsonc
 // success
@@ -300,7 +347,7 @@ Clients connect with the same JWT (`auth: { token }`) and join the `fleet` room 
 
 ## 🔑 Configuration
 
-**`server/.env`** (copy from `.env.example`)
+**`server/.env`** (copy from `server/.env.example`)
 
 ```env
 NODE_ENV=development
@@ -313,20 +360,27 @@ JWT_REFRESH_EXPIRES=7d
 CLIENT_URL=http://localhost:5173
 ```
 
+Optional: `REPORT_TZ=Asia/Kolkata` sets the time zone used to group deliveries by day on the dashboard and reports (default: the server's own zone).
+
 In production the server refuses to start while the JWT secrets still contain `change_me`.
 
-**`client/.env`**
+**`client/.env`** (copy from `client/.env.example`)
 
 ```env
 VITE_API_BASE_URL=http://localhost:5000/api/v1
 VITE_SOCKET_URL=http://localhost:5000
+# Optional: replace the street basemap with any XYZ tile provider
+# VITE_MAP_TILE_URL=https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=YOUR_KEY
+# VITE_MAP_TILE_ATTR=&copy; MapTiler &copy; OpenStreetMap contributors
 ```
 
-Never commit real `.env` files.
+Vite reads `client/.env` at start-up, so restart the client after changing it. Never commit real `.env` files.
 
 ---
 
 ## 🐳 Running with Docker
+
+Docker is optional; the Quick Start above runs everything natively. If you prefer containers:
 
 ```bash
 cp .env.example .env          # set two long random JWT secrets
@@ -349,13 +403,13 @@ docker compose exec server node src/simulator/simulate.js
 
 ## 🛰️ GPS Simulator
 
-`npm run simulate` logs in as the admin, finds every **In Transit** shipment, and drives its vehicle toward the destination, pushing `vehicle:location` events exactly like a real GPS unit. It marks the shipment **Delivered** on arrival and occasionally spikes above 80 km/h to trigger speeding alerts.
+`npm run simulate` (from the root or from `server/`) logs in as the admin, finds every **In Transit** shipment, and drives its vehicle toward the destination, pushing `vehicle:location` events exactly like a real GPS unit. It re-scans for new In Transit shipments every 10 seconds, marks each shipment **Delivered** on arrival, and occasionally spikes above 80 km/h to trigger speeding alerts.
 
 ```bash
 npm run simulate -- --interval=2000 --speedup=40 --vehicles=10
 ```
 
-New shipments you move to In Transit in the UI are picked up automatically. Override credentials with `SIM_EMAIL`, `SIM_PASSWORD` and `API_URL`.
+`--interval` is the milliseconds between position updates, `--speedup` multiplies real driving speed so a trip finishes in minutes, and `--vehicles` caps how many trucks move at once. Add `--auto` (or `--auto=5`) for demo mode: whenever fewer than three (or five) trips are on the road, the simulator books a new shipment between two cities, assigns a free vehicle and driver, and sends it out, so the live map never goes quiet. `npm run dev:all` starts the simulator in this mode. Override credentials with `SIM_EMAIL`, `SIM_PASSWORD` and `API_URL`.
 
 To connect real hardware, have your device gateway authenticate and emit the same `vehicle:location` event.
 
@@ -364,10 +418,11 @@ To connect real hardware, have your device gateway authenticate and emit the sam
 ## 🧪 Testing
 
 ```bash
-cd server && npm test
+npm test             # from the root, or: cd server && npm test
+npm run build        # client production build; also catches Tailwind/JSX errors
 ```
 
-Currently covers the geo utilities (distance, movement, route ordering, ETA). Adding API tests (Jest + Supertest) and client tests (Vitest) is on the roadmap.
+Server tests currently cover the geo utilities (distance, movement, route ordering, ETA). Adding API tests (Jest + Supertest) and client tests (Vitest) is on the roadmap.
 
 ---
 
@@ -375,10 +430,10 @@ Currently covers the geo utilities (distance, movement, route ordering, ETA). Ad
 
 - Passwords hashed with bcrypt (12 rounds); hashes are never returned by the API.
 - Short-lived JWT access tokens plus refresh tokens; sockets use the same JWT.
-- Role checks on every protected route; unknown body fields are stripped by zod (no mass assignment).
+- Role checks on every protected route; unknown body fields are stripped by zod (no mass assignment). Validation errors come back as readable sentences, e.g. "Customer phone must contain 7 to 15 digits".
 - Helmet headers, CORS limited to `CLIENT_URL`, JSON body limit, rate limiting on login and refresh.
 - Query filters are whitelisted and typed; search input is regex-escaped.
-- Public tracking exposes only customer-safe fields.
+- Public tracking exposes only customer-safe fields: no customer name or phone, no internal timeline notes, and the driver's first name only. Tracking IDs carry six random characters and the endpoint is rate limited, so IDs cannot be enumerated.
 - Secrets come from environment variables; `.env` is git-ignored.
 
 Before real production use also add HTTPS (Nginx/TLS), refresh-token revocation, and remove the demo accounts.
@@ -387,7 +442,7 @@ Before real production use also add HTTPS (Nginx/TLS), refresh-token revocation,
 
 ## ☁️ CI/CD & Deployment
 
-Sample GitHub Actions workflow (`.github/workflows/ci.yml`):
+The repository includes a GitHub Actions workflow at `.github/workflows/ci.yml` that runs the server tests and the client build on every push and pull request to `main`:
 
 ```yaml
 name: CI
@@ -411,7 +466,7 @@ Deployment options: Docker Compose on an AWS EC2 instance behind Nginx/TLS with 
 
 ## 🗺️ Roadmap
 
-Built: dashboard, live map, vehicle/driver/shipment management, routes and planner, reports, alerts, JWT auth with RBAC, Docker, GPS simulator.
+Built: dashboard, live map with shipping-detail panel, vehicle/driver/shipment management, routes and planner, reports, alerts, public tracking with live position, JWT auth with RBAC, Docker, GPS simulator, one-command local launcher.
 
 Planned:
 - [ ] API tests (Jest + Supertest) and client tests (Vitest), ESLint/Prettier, pre-commit hooks
@@ -432,8 +487,9 @@ Planned:
 
 1. Fork the repo and create a branch: `git checkout -b feature/your-feature`.
 2. Use Conventional Commits (`feat: add geofencing alerts`).
-3. Make sure `npm test` (server) and `npm run build` (client) pass.
-4. Open a pull request with a clear description and screenshots for UI changes.
+3. Make sure `npm test` and `npm run build` pass from the repo root.
+4. Keep new screens on the existing design tokens and the `.card` / `.btn-*` / `.input` classes in `client/src/index.css`.
+5. Open a pull request with a clear description and screenshots for UI changes.
 
 ## 📄 License
 
