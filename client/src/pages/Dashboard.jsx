@@ -118,7 +118,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <PageHeader title={`${greeting()}, ${user.name.split(' ')[0]}`} subtitle="Here is what your fleet is doing right now. Numbers update live as trucks move and shipments change.">
         <Link to="/tracking" className="btn btn-secondary"><Navigation size={16} /> Live map</Link>
-        <Link to="/shipments" className="btn btn-dark"><Plus size={16} /> New shipment</Link>
+        <Link to="/shipments?new=1" className="btn btn-dark"><Plus size={16} /> New shipment</Link>
       </PageHeader>
 
       <section aria-label="Key numbers" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

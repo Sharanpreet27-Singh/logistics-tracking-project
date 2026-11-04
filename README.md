@@ -76,6 +76,18 @@ cd server
 npm run simulate
 ```
 
+### Option C: one double-click (Windows) or one script (macOS / Linux)
+
+`scripts\start-local.cmd` installs what is missing, creates the `.env` files, opens three terminal windows (API, client, simulator) and opens the browser. On macOS / Linux run `bash scripts/start-local.sh`, which does the same in one terminal. Run `npm run seed` once for demo data.
+
+### Try the production build locally
+
+```bash
+npm run serve      # builds the client, then the API serves it at http://localhost:5000
+```
+
+This is exactly what runs on a server: one Node process serving both the API and the built client (`SERVE_CLIENT=true`).
+
 ### Sign in
 
 Open **http://localhost:5173**. The login page has one-click demo-account chips, or type:
@@ -97,6 +109,7 @@ Then open **Live tracking** to see the four seeded trucks driving toward their d
 | Symptom | Cause and fix |
 |---|---|
 | Red overlay in the browser: *"The `bg-cream` class does not exist"* | The Vite dev server was started before `client/tailwind.config.js` changed and kept the old config in memory. Stop the client (`Ctrl+C`) and start it again. |
+| Production site shows a blank page or missing fonts/tiles | Check the browser console for Content-Security-Policy errors; the allowed sources are set in `server/src/app.js`. Make sure `CLIENT_URL` in `server/.env` is the address you open in the browser. |
 | `Port 5173 is already in use` | A previous dev server is still running. Close that terminal, or on Windows run `netstat -ano \| findstr :5173` and then `taskkill /PID <pid> /F`. |
 | API prints `MongooseServerSelectionError` | MongoDB is not running or `MONGO_URI` is wrong. On Windows run `sc query MongoDB`; start it with `net start MongoDB`. |
 | Simulator says `No In Transit shipments yet` | Every shipment has been delivered. With `npm run dev:all` the simulator books new trips by itself within 10 seconds; otherwise create and dispatch one in the UI, or run `npm run seed` to reset the demo data. |
@@ -151,7 +164,7 @@ Then open **Live tracking** to see the four seeded trucks driving toward their d
 
 ### 🔐 Authentication & Access Control
 - JWT access + refresh tokens; the client refreshes silently when the access token expires.
-- Role-based access control (admin, manager, dispatcher, driver) on every API route and in the UI.
+- Role-based access control (admin, manager, dispatcher, driver) on every API route and in the UI; the driver role is read-only, the other three run operations.
 
 ### 🎨 UI
 - Design tokens in `client/tailwind.config.js` (cream, ink, sun, ember, leaf, sky, berry, line) with Inter and Outfit fonts.
@@ -231,7 +244,9 @@ Request flow: `Route → authenticate/authorize → controller (zod-validated) �
 
 ```text
 logistics-fleet-tracking/
-├── package.json          Root launcher: setup, seed, dev, dev:all, simulate, test, build
+├── package.json          Root launcher: setup, seed, dev, dev:all, serve, simulate, test, build
+├── scripts/              start-local.cmd (Windows) / start-local.sh: one-click local start
+├── deploy/               ec2-setup.sh, deploy.sh, ecosystem.config.cjs (PM2), nginx.conf for AWS EC2
 ├── client/
 │   ├── src/
 │   │   ├── components/   Layout, CrudPage, MapView, Modal, StatusBadge, DashboardCard,
@@ -261,7 +276,7 @@ logistics-fleet-tracking/
 │   │   ├── simulator/    simulate.js
 │   │   ├── app.js · server.js
 │   ├── tests/            geo.test.js
-│   ├── Dockerfile · package.json · .env.example
+│   ├── Dockerfile · package.json · .env.example · .env.production.example
 │
 ├── .github/workflows/ci.yml · docker-compose.yml · .env.example · .gitignore · LICENSE · README.md
 ```
@@ -292,16 +307,15 @@ Base URL: `/api/v1`. Everything except `/health`, `/auth/login`, `/auth/refresh`
 | Public | GET | `/track/:trackingId` | Public (rate limited: 20/min) |
 | Dashboard | GET | `/dashboard/stats` | Any user |
 | Vehicles | GET | `/vehicles`, `/vehicles/:id` | Any user |
-| Vehicles | POST / PUT | `/vehicles`, `/vehicles/:id` | Admin, manager |
-| Vehicles | DELETE | `/vehicles/:id` | Admin |
-| Drivers | GET / POST / PUT / DELETE | `/drivers`, `/drivers/:id` | Same split as vehicles |
+| Vehicles | POST / PUT / DELETE | `/vehicles`, `/vehicles/:id` | Admin, manager, dispatcher |
+| Drivers | GET / POST / PUT / DELETE | `/drivers`, `/drivers/:id` | Same as vehicles |
 | Shipments | GET | `/shipments`, `/shipments/:id` | Any user |
 | Shipments | POST | `/shipments` | Admin, manager, dispatcher |
 | Shipments | PATCH | `/shipments/:id/assign`, `/shipments/:id/status` | Admin, manager, dispatcher |
 | Shipments | DELETE | `/shipments/:id` | Admin |
 | Routes | GET | `/routes/:shipmentId` | Any user |
 | Routes | POST | `/routes/optimize` | Admin, manager, dispatcher |
-| Reports | GET | `/reports/deliveries`, `/reports/vehicles`, `/reports/drivers` | Admin, manager |
+| Reports | GET | `/reports/deliveries`, `/reports/vehicles`, `/reports/drivers` | Admin, manager, dispatcher |
 | Alerts | GET / PATCH | `/alerts`, `/alerts/:id/read`, `/alerts/read-all` | Any user |
 
 List endpoints accept `page`, `limit` (max 200), `search` and a `status` filter (plus `type` for vehicles). A filter can list several values: `status=Assigned,In Transit`.
@@ -339,9 +353,11 @@ Clients connect with the same JWT (`auth: { token }`) and join the `fleet` room 
 |---|:---:|:---:|:---:|:---:|
 | View dashboard, map, shipments, vehicles, drivers | ✅ | ✅ | ✅ | ✅ (read-only) |
 | Create / assign shipments, update status | ✅ | ✅ | ✅ | ❌ |
-| Add / edit vehicles and drivers | ✅ | ✅ | ❌ | ❌ |
-| Delete vehicles, drivers, shipments | ✅ | ❌ | ❌ | ❌ |
-| View reports | ✅ | ✅ | ❌ | ❌ |
+| Add / edit / delete vehicles and drivers | ✅ | ✅ | ✅ | ❌ |
+| View reports | ✅ | ✅ | ✅ | ❌ |
+| Delete shipments (erases delivery history) | ✅ | ❌ | ❌ | ❌ |
+
+Admin, manager and dispatcher are all operations roles with the same day-to-day powers; admin additionally deletes shipments. Change the lists at the top of `server/src/routes/index.js` (and the matching checks in `client/src/components/CrudPage.jsx`, `Layout.jsx`, `App.jsx`) to tighten this.
 
 ---
 
@@ -363,6 +379,8 @@ CLIENT_URL=http://localhost:5173
 Optional: `REPORT_TZ=Asia/Kolkata` sets the time zone used to group deliveries by day on the dashboard and reports (default: the server's own zone).
 
 In production the server refuses to start while the JWT secrets still contain `change_me`.
+
+**`client/.env.production`** (committed) points the production build at relative URLs (`/api/v1`, same-origin sockets), so the build works wherever it is served from.
 
 **`client/.env`** (copy from `client/.env.example`)
 
@@ -442,6 +460,30 @@ Before real production use also add HTTPS (Nginx/TLS), refresh-token revocation,
 
 ## ☁️ CI/CD & Deployment
 
+### Deploy to AWS EC2 (no Docker)
+
+One small instance runs everything: Nginx on port 80 in front of the Node API, which also serves the built client, and MongoDB on the same box (or MongoDB Atlas). The scripts live in `deploy/`.
+
+1. **Launch an instance.** Ubuntu Server 22.04 or 24.04, `t3.small` or larger (t3.micro works for a demo), 20 GB disk. In the security group allow inbound **22** (SSH, your IP only), **80** and **443**. Keep MongoDB's port 27017 closed.
+2. **Connect** with SSH: `ssh -i your-key.pem ubuntu@<public-ip>`.
+3. **Run the setup script** (installs Node 20, MongoDB 8, Nginx and PM2, clones the repo into `/opt/fleettrack`, generates JWT secrets, builds the client and starts the API):
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/Sharanpreet27-Singh/logistics-tracking-project/main/deploy/ec2-setup.sh -o ec2-setup.sh
+   bash ec2-setup.sh
+   ```
+
+   Using MongoDB Atlas instead? Run `SKIP_MONGO=1 bash ec2-setup.sh`, then put your Atlas connection string in `/opt/fleettrack/server/.env` as `MONGO_URI` and run `pm2 restart fleettrack-api`.
+4. **Open** `http://<public-ip>`. Load demo data with `cd /opt/fleettrack/server && npm run seed` (wipes the database) and sign in with the demo accounts. For moving trucks on a demo instance: `pm2 start deploy/ecosystem.config.cjs --only fleettrack-simulator`.
+5. **Updates:** `cd /opt/fleettrack && bash deploy/deploy.sh` pulls, rebuilds and reloads with zero downtime.
+6. **HTTPS:** point a domain at the instance, set `CLIENT_URL=https://your-domain.com` in `server/.env`, then `sudo apt-get install -y certbot python3-certbot-nginx && sudo certbot --nginx -d your-domain.com`.
+
+What the pieces do: `deploy/ec2-setup.sh` (one-time install), `deploy/deploy.sh` (build + reload, run after every pull), `deploy/ecosystem.config.cjs` (PM2 processes: API, optional simulator), `deploy/nginx.conf` (reverse proxy incl. WebSocket upgrade), `server/.env.production.example` (production settings: `SERVE_CLIENT`, `TRUST_PROXY`, `REPORT_TZ`). Logs: `pm2 logs fleettrack-api`. The API refuses to start in production while the JWT secrets still say `change_me`.
+
+Other options: `docker compose up` on any Docker host (see above), or the client on S3/CloudFront with the API on a container service and `CLIENT_URL` set to the CloudFront origin.
+
+### Continuous integration
+
 The repository includes a GitHub Actions workflow at `.github/workflows/ci.yml` that runs the server tests and the client build on every push and pull request to `main`:
 
 ```yaml
@@ -459,8 +501,6 @@ jobs:
       - run: cd server && npm install && npm test
       - run: cd client && npm install && npm run build
 ```
-
-Deployment options: Docker Compose on an AWS EC2 instance behind Nginx/TLS with MongoDB Atlas, or the client on S3/CloudFront and the API on any container host.
 
 ---
 

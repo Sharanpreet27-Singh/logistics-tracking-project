@@ -30,7 +30,7 @@ export default function App() {
           <Route path="drivers" element={<Drivers />} />
           <Route path="shipments" element={<Shipments />} />
           <Route path="routes" element={<RoutesPage />} />
-          <Route path="reports" element={<ProtectedRoute roles={['admin', 'manager']}><Reports /></ProtectedRoute>} />
+          <Route path="reports" element={<ProtectedRoute roles={['admin', 'manager', 'dispatcher']}><Reports /></ProtectedRoute>} />
           <Route path="alerts" element={<Alerts />} />
         </Route>
         <Route path="*" element={<NotFound />} />

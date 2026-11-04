@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, Search, ArrowRight, Download, HelpCircle, ChevronDown, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -8,6 +9,7 @@ import Modal from '../components/Modal.jsx';
 import Spinner from '../components/Spinner.jsx';
 import StatusBadge, { STATUS_HELP, STATUS_COLORS } from '../components/StatusBadge.jsx';
 import PageHeader from '../components/PageHeader.jsx';
+import { confirm } from '../components/Confirm.jsx';
 import { CITIES, SHIPMENT_STATUSES, PHONE_PATTERN, PHONE_HELP, formatDateTime, downloadCSV } from '../utils/helpers.js';
 
 // Next steps a dispatcher can take from each status (mirrors the server rules)
@@ -28,7 +30,7 @@ const kg = (n) => `${Number(n).toLocaleString()} kg`;
 
 export default function Shipments() {
   const { user } = useAuth();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const canDispatch = ['admin', 'manager', 'dispatcher'].includes(user.role);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true); // first load only
@@ -41,6 +43,13 @@ export default function Shipments() {
   const requestNo = useRef(0);
 
   useEffect(() => setSearch(params.get('search') || ''), [params]);
+  // /shipments?new=1 (the dashboard button) opens the form straight away.
+  useEffect(() => {
+    if (params.get('new') && canDispatch) {
+      setCreating(true);
+      setParams((p) => { p.delete('new'); return p; }, { replace: true });
+    }
+  }, [params, canDispatch, setParams]);
 
   const load = useCallback(async () => {
     const mine = ++requestNo.current;
@@ -66,10 +75,13 @@ export default function Shipments() {
   const changeStatus = async (s, next) => {
     let note;
     if (next === 'Failed') {
-      note = window.prompt('Why did the delivery fail?');
+      note = await confirm({ title: `Mark ${s.trackingId} as failed?`, message: 'The vehicle and driver are freed and an alert is raised.', confirmLabel: 'Mark failed', danger: true, input: { label: 'Why did the delivery fail?', placeholder: 'e.g. Consignee unavailable', required: true } });
       if (note === null) return;
     }
-    if (next === 'Cancelled' && !window.confirm('Cancel this shipment?')) return;
+    if (next === 'Cancelled') {
+      const ok = await confirm({ title: `Cancel ${s.trackingId}?`, message: `${s.pickup.address} to ${s.delivery.address} for ${s.customerName}. A cancelled shipment cannot be restarted.`, confirmLabel: 'Cancel shipment', cancelLabel: 'Keep it', danger: true });
+      if (!ok) return;
+    }
     try {
       await api.patch(`/shipments/${s._id}/status`, { status: next, note: note || undefined });
       toast.success(`${s.trackingId} marked ${next}`);
@@ -135,7 +147,14 @@ export default function Shipments() {
           ) : (
             <table className="w-full">
               <thead>
-                <tr>{['Shipment', 'Route', 'Vehicle / driver', 'ETA', 'Status', canDispatch && 'Next step'].filter(Boolean).map((h) => <th key={h} className="th">{h}</th>)}</tr>
+                <tr>
+                  <th className="th">Shipment</th>
+                  <th className="th">Route</th>
+                  <th className="th">Vehicle / driver</th>
+                  <th className="th hidden xl:table-cell">ETA</th>
+                  <th className="th">Status</th>
+                  {canDispatch && <th className="th">Next step</th>}
+                </tr>
               </thead>
               <tbody>
                 {rows.map((s) => (
@@ -143,16 +162,16 @@ export default function Shipments() {
                     <td className="td whitespace-nowrap"><span className="block font-semibold">{s.trackingId}</span><span className="block text-xs text-ink-soft">{s.customerName}</span></td>
                     <td className="td whitespace-nowrap"><span className="block">{s.pickup.address} <ArrowRight size={12} className="inline text-ink-mute" /> {s.delivery.address}</span><span className="block text-xs text-ink-soft">{s.distanceKm} km · {kg(s.weightKg)}</span></td>
                     <td className="td whitespace-nowrap">{s.vehicle ? <><span className="block">{s.vehicle.registrationNo}</span><span className="block text-xs text-ink-soft">{s.driver?.name}</span></> : <span className="text-ink-mute">Not assigned</span>}</td>
-                    <td className="td whitespace-nowrap text-ink-soft">{s.status === 'Delivered' ? `Delivered ${formatDateTime(s.deliveredAt)}` : formatDateTime(s.eta)}</td>
+                    <td className="td hidden whitespace-nowrap text-ink-soft xl:table-cell">{s.status === 'Delivered' ? `Delivered ${formatDateTime(s.deliveredAt)}` : formatDateTime(s.eta)}</td>
                     <td className="td"><StatusBadge status={s.status} /></td>
                     {canDispatch && (
                       <td className="td whitespace-nowrap">
-                        <div className="flex gap-1">
-                          {['Created', 'Assigned'].includes(s.status) && <button className="btn btn-dark btn-sm" onClick={() => setAssigning(s)}>{s.status === 'Created' ? 'Assign vehicle' : 'Reassign'}</button>}
-                          {(NEXT[s.status] || []).map((n) => (
-                            <button key={n} className={`btn btn-sm ${n === 'Failed' || n === 'Cancelled' ? 'btn-secondary text-ember' : 'btn-primary'}`} onClick={() => changeStatus(s, n)} title={STATUS_HELP[n]}>{ACTION_LABEL[n]}</button>
-                          ))}
-                        </div>
+                        <RowActions
+                          actions={[
+                            ...(['Created', 'Assigned'].includes(s.status) ? [{ label: s.status === 'Created' ? 'Assign vehicle' : 'Reassign', primary: true, onClick: () => setAssigning(s) }] : []),
+                            ...(NEXT[s.status] || []).map((n) => ({ label: ACTION_LABEL[n], help: STATUS_HELP[n], danger: n === 'Failed' || n === 'Cancelled', onClick: () => changeStatus(s, n) })),
+                          ]}
+                        />
                       </td>
                     )}
                   </tr>
@@ -166,6 +185,68 @@ export default function Shipments() {
       {creating && <CreateModal onClose={() => setCreating(false)} onDone={() => { setCreating(false); load(); }} />}
       {assigning && <AssignModal shipment={assigning} onClose={() => setAssigning(null)} onDone={() => { setAssigning(null); load(); }} />}
     </div>
+  );
+}
+
+/**
+ * Row actions: inline buttons on wide screens, a single "Next step" menu below the xl breakpoint
+ * so the table never has to scroll sideways to reach them. The menu is portalled to <body> because
+ * the table scroller would clip it.
+ */
+function RowActions({ actions }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
+  const btn = useRef(null);
+  const menu = useRef(null);
+
+  const toggle = () => {
+    if (!open && btn.current) {
+      const r = btn.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+    }
+    setOpen((o) => !o);
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = (e) => { if (!btn.current?.contains(e.target) && !menu.current?.contains(e.target)) setOpen(false); };
+    const key = (e) => e.key === 'Escape' && setOpen(false);
+    const hide = () => setOpen(false);
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', key);
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', key);
+      window.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
+    };
+  }, [open]);
+
+  if (!actions.length) return <span className="text-ink-mute">-</span>;
+  return (
+    <>
+      <div className="hidden gap-1 xl:flex">
+        {actions.map((a) => (
+          <button key={a.label} className={`btn btn-sm ${a.danger ? 'btn-secondary text-ember' : a.primary ? 'btn-dark' : 'btn-primary'}`} onClick={a.onClick} title={a.help}>{a.label}</button>
+        ))}
+      </div>
+      <div className="xl:hidden">
+        <button ref={btn} className="btn btn-secondary btn-sm" onClick={toggle} aria-haspopup="menu" aria-expanded={open}>Next step <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} /></button>
+        {open && createPortal(
+          <div ref={menu} role="menu" className="fixed z-[1100] min-w-[190px] rounded-2xl border border-line bg-white p-1.5 shadow-float" style={{ top: pos.top, right: pos.right }}>
+            {actions.map((a) => (
+              <button key={a.label} role="menuitem" className={`flex w-full flex-col rounded-xl px-3 py-2 text-left text-sm font-medium hover:bg-cream ${a.danger ? 'text-ember' : ''}`} onClick={() => { setOpen(false); a.onClick(); }}>
+                {a.label}
+                {a.help && <span className="text-xs font-normal text-ink-soft">{a.help}</span>}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+      </div>
+    </>
   );
 }
 

@@ -8,7 +8,7 @@ import Avatar from '../components/Avatar.jsx';
 const DEMO = [
   { label: 'Admin', name: 'Admin User', email: 'admin@fleet.com', password: 'Admin@123', note: 'Full access' },
   { label: 'Manager', name: 'Fleet Manager', email: 'manager@fleet.com', password: 'Manager@123', note: 'Fleet + reports' },
-  { label: 'Dispatcher', name: 'Dispatch Desk', email: 'dispatcher@fleet.com', password: 'Dispatch@123', note: 'Shipments only' },
+  { label: 'Dispatcher', name: 'Dispatch Desk', email: 'dispatcher@fleet.com', password: 'Dispatch@123', note: 'Fleet + reports' },
 ];
 
 const LIME = '#C9F55B';
@@ -83,7 +83,7 @@ function Stat({ label, value, delta, tone }) {
   return (
     <div>
       <p className="text-xs text-ink-soft">{label}</p>
-      <p className="mt-0.5 flex items-center gap-2 font-display text-2xl font-semibold leading-none">{value}<span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={chip}>{delta}</span></p>
+      <p className="mt-0.5 flex items-center gap-2 whitespace-nowrap font-display text-2xl font-semibold leading-none">{value}<span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={chip}>{delta}</span></p>
     </div>
   );
 }

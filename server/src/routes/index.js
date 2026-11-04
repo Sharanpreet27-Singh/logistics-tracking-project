@@ -15,8 +15,10 @@ import { Shipment } from '../models/Shipment.js';
 import { vehicleSchema, driverSchema, shipmentCreateSchema } from '../validators/schemas.js';
 
 const router = Router();
-const manage = authorize('admin', 'manager');
-const dispatch = authorize('admin', 'manager', 'dispatcher');
+// Operations staff (admin, manager, dispatcher) run the fleet: vehicles, drivers, shipments, reports.
+// Only admins delete shipments, since that erases delivery history.
+const manage = authorize('admin', 'manager', 'dispatcher');
+const dispatch = manage;
 
 // ---- Public ----
 router.get('/health', (_req, res) => res.json({ success: true, status: 'ok', uptime: process.uptime() }));
@@ -53,7 +55,7 @@ router.get('/vehicles', vehicleCrud.list);
 router.post('/vehicles', manage, vehicleCrud.create);
 router.get('/vehicles/:id', vehicleCrud.get);
 router.put('/vehicles/:id', manage, vehicleCrud.update);
-router.delete('/vehicles/:id', authorize('admin'), vehicleCrud.remove);
+router.delete('/vehicles/:id', manage, vehicleCrud.remove);
 
 const driverCrud = crud({
   Model: Driver,
@@ -67,7 +69,7 @@ router.get('/drivers', driverCrud.list);
 router.post('/drivers', manage, driverCrud.create);
 router.get('/drivers/:id', driverCrud.get);
 router.put('/drivers/:id', manage, driverCrud.update);
-router.delete('/drivers/:id', authorize('admin'), driverCrud.remove);
+router.delete('/drivers/:id', manage, driverCrud.remove);
 
 const shipmentCrud = crud({
   Model: Shipment,

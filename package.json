@@ -11,10 +11,13 @@
     "simulate": "npm run simulate --prefix server",
     "simulate:wait": "wait-on tcp:5000 && npm run simulate --prefix server -- --auto",
     "test": "npm test --prefix server",
-    "build": "npm run build --prefix client"
+    "build": "npm run build --prefix client",
+    "start": "npm start --prefix server",
+    "serve": "npm run build && cross-env SERVE_CLIENT=true npm start --prefix server"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
-    "wait-on": "^8.0.1"
+    "wait-on": "^8.0.1",
+    "cross-env": "^7.0.3"
   }
 }

@@ -19,7 +19,7 @@ const GROUPS = [
     { to: '/drivers', label: 'Drivers', icon: Users },
   ] },
   { title: 'Insights', items: [
-    { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'manager'] },
+    { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'manager', 'dispatcher'] },
     { to: '/alerts', label: 'Alerts', icon: Bell },
   ] },
 ];

@@ -10,7 +10,7 @@ const SPEED_LIMIT_KMH = 80;
 const CAN_PUSH_LOCATION = ['admin', 'manager', 'dispatcher'];
 
 export function initSockets(httpServer) {
-  const io = new Server(httpServer, { cors: { origin: env.clientUrl, credentials: true } });
+  const io = new Server(httpServer, { cors: { origin: env.clientUrls, credentials: true } });
   setIo(io);
 
   // Same JWT as the REST API
@@ -34,9 +34,13 @@ export function initSockets(httpServer) {
       if (!parsed.success) return;
       const { vehicleId, lat, lng, speed, heading } = parsed.data;
       try {
+        // Moving when there is speed; a halted truck becomes "stopped" but a booked/idle one keeps its status.
         const vehicle = await Vehicle.findOneAndUpdate(
           { _id: vehicleId, status: { $ne: 'maintenance' } },
-          { location: { lat, lng }, speed, heading, lastUpdated: new Date(), status: speed > 0 ? 'moving' : 'idle' },
+          [{ $set: {
+            location: { lat, lng }, speed, heading, lastUpdated: new Date(),
+            status: { $cond: [{ $gt: [speed, 0] }, 'moving', { $cond: [{ $eq: ['$status', 'moving'] }, 'stopped', '$status'] }] },
+          } }],
           { new: true }
         );
         if (!vehicle) return;

@@ -6,12 +6,14 @@ import 'leaflet/dist/leaflet.css';
 import './index.css';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { ConfirmHost } from './components/Confirm.jsx';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
         <App />
+        <ConfirmHost />
         <Toaster position="top-right" toastOptions={{ style: { fontSize: '14px' } }} />
       </AuthProvider>
     </BrowserRouter>

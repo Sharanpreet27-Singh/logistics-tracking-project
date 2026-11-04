@@ -5,6 +5,7 @@ import api, { errorMessage } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { downloadCSV } from '../utils/helpers.js';
 import Modal from './Modal.jsx';
+import { confirm } from './Confirm.jsx';
 import Spinner from './Spinner.jsx';
 import PageHeader from './PageHeader.jsx';
 
@@ -15,8 +16,9 @@ import PageHeader from './PageHeader.jsx';
  */
 export default function CrudPage({ title, subtitle, noun, endpoint, columns, fields, filterOptions, filterKey = 'status', csvRow }) {
   const { user } = useAuth();
-  const canEdit = ['admin', 'manager'].includes(user.role);
-  const canDelete = user.role === 'admin';
+  // Mirrors the server: operations staff manage vehicles and drivers; only the driver role is read-only.
+  const canEdit = ['admin', 'manager', 'dispatcher'].includes(user.role);
+  const canDelete = canEdit;
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -81,7 +83,9 @@ export default function CrudPage({ title, subtitle, noun, endpoint, columns, fie
   };
 
   const remove = async (row) => {
-    if (!window.confirm(`Delete this ${noun.toLowerCase()}? This cannot be undone.`)) return;
+    const name = row.registrationNo || row.name || row.trackingId || `this ${noun.toLowerCase()}`;
+    const ok = await confirm({ title: `Delete ${name}?`, message: 'This cannot be undone.', confirmLabel: `Delete ${noun.toLowerCase()}`, cancelLabel: 'Keep it', danger: true });
+    if (!ok) return;
     try {
       await api.delete(`${endpoint}/${row._id}`);
       toast.success(`${noun} deleted`);
