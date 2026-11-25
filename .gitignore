@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+/server/certs/*.pem
+/server/.local/
 *.log
 .DS_Store
 coverage/

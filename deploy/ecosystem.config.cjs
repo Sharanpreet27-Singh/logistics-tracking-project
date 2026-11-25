@@ -1,4 +1,4 @@
-// PM2 process file. Secrets and MONGO_URI come from server/.env (loaded by the app itself).
+// PM2 process file. MySQL settings and other secrets come from server/.env.
 const path = require('node:path');
 const server = path.join(__dirname, '..', 'server');
 

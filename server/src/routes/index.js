@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { env } from '../config/env.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { crud } from '../controllers/crud.js';
 import * as auth from '../controllers/authController.js';
@@ -9,9 +10,7 @@ import * as reports from '../controllers/reportController.js';
 import * as routing from '../controllers/routeController.js';
 import * as alerts from '../controllers/alertController.js';
 import { trackShipment } from '../controllers/trackController.js';
-import { Vehicle } from '../models/Vehicle.js';
-import { Driver } from '../models/Driver.js';
-import { Shipment } from '../models/Shipment.js';
+import { Driver, Shipment, Vehicle } from '../models/index.js';
 import { vehicleSchema, driverSchema, shipmentCreateSchema } from '../validators/schemas.js';
 
 const router = Router();
@@ -21,7 +20,7 @@ const manage = authorize('admin', 'manager', 'dispatcher');
 const dispatch = manage;
 
 // ---- Public ----
-router.get('/health', (_req, res) => res.json({ success: true, status: 'ok', uptime: process.uptime() }));
+router.get('/health', (_req, res) => res.json({ success: true, status: 'ok', uptime: process.uptime(), demoMode: env.demoMode }));
 // Public tracking: enough for a page that refreshes every 15 s, far too slow for guessing IDs.
 const trackLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -48,8 +47,7 @@ const vehicleCrud = crud({
   schema: vehicleSchema,
   searchFields: ['registrationNo', 'make', 'model'],
   filters: ['status', 'type'],
-  populate: [{ path: 'assignedDriver', select: 'name phone' }],
-  afterRemove: (v) => Driver.updateMany({ assignedVehicle: v._id }, { assignedVehicle: null }),
+  include: [{ association: 'assignedDriverRecord', attributes: ['_id', 'name', 'phone'] }],
 });
 router.get('/vehicles', vehicleCrud.list);
 router.post('/vehicles', manage, vehicleCrud.create);
@@ -62,8 +60,7 @@ const driverCrud = crud({
   schema: driverSchema,
   searchFields: ['name', 'phone', 'licenseNo'],
   filters: ['status'],
-  populate: [{ path: 'assignedVehicle', select: 'registrationNo' }],
-  afterRemove: (d) => Vehicle.updateMany({ assignedDriver: d._id }, { assignedDriver: null }),
+  include: [{ association: 'assignedVehicleRecord', attributes: ['_id', 'registrationNo'] }],
 });
 router.get('/drivers', driverCrud.list);
 router.post('/drivers', manage, driverCrud.create);
@@ -76,9 +73,9 @@ const shipmentCrud = crud({
   schema: shipmentCreateSchema,
   searchFields: ['trackingId', 'customerName'],
   filters: ['status'],
-  populate: [
-    { path: 'vehicle', select: 'registrationNo type location' },
-    { path: 'driver', select: 'name phone' },
+  include: [
+    { association: 'vehicleRecord', attributes: ['_id', 'registrationNo', 'type', 'location'] },
+    { association: 'driverRecord', attributes: ['_id', 'name', 'phone'] },
   ],
 });
 router.get('/shipments', shipmentCrud.list);

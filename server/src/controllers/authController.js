@@ -5,20 +5,20 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { loginSchema } from '../validators/schemas.js';
 
-const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role });
+const publicUser = (u) => ({ id: u._id, name: u.name, email: u.email, role: u.role });
 
 function signTokens(user) {
   const accessToken = jwt.sign({ role: user.role, name: user.name }, env.accessSecret, {
-    subject: user.id,
+    subject: user._id,
     expiresIn: env.accessExpires,
   });
-  const refreshToken = jwt.sign({}, env.refreshSecret, { subject: user.id, expiresIn: env.refreshExpires });
+  const refreshToken = jwt.sign({}, env.refreshSecret, { subject: user._id, expiresIn: env.refreshExpires });
   return { accessToken, refreshToken };
 }
 
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
-  const user = await User.findOne({ email }).select('+passwordHash');
+  const user = await User.unscoped().findOne({ where: { email: email.toLowerCase() } });
   if (!user || !user.isActive || !(await user.verifyPassword(password))) {
     throw new ApiError(401, 'Incorrect email or password');
   }
@@ -36,13 +36,13 @@ export const refresh = asyncHandler(async (req, res) => {
   } catch {
     throw new ApiError(401, 'Refresh token is invalid or expired');
   }
-  const user = await User.findById(payload.sub);
+  const user = await User.findByPk(payload.sub);
   if (!user || !user.isActive) throw new ApiError(401, 'Account not available');
   res.json({ success: true, data: signTokens(user) });
 });
 
 export const me = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user.id);
+  const user = await User.findByPk(req.user.id);
   if (!user) throw new ApiError(404, 'User not found');
   res.json({ success: true, data: publicUser(user) });
 });

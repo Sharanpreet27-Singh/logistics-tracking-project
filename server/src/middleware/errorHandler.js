@@ -1,4 +1,5 @@
 import { ZodError } from 'zod';
+import { BaseError, UniqueConstraintError, ValidationError } from 'sequelize';
 import { ApiError } from '../utils/ApiError.js';
 
 export const notFound = (req, _res, next) => next(new ApiError(404, `Route not found: ${req.method} ${req.originalUrl}`));
@@ -50,19 +51,21 @@ export function errorHandler(err, _req, res, _next) {
     });
     return res.status(400).json({ success: false, message: errors[0]?.message || 'Validation failed', errors });
   }
-  if (err.name === 'CastError') return res.status(400).json({ success: false, message: `${label(err.path || 'id')} is not valid` });
-  if (err.code === 11000) {
-    const field = Object.keys(err.keyPattern || {})[0] || 'value';
-    const value = err.keyValue?.[field];
+  if (err instanceof UniqueConstraintError) {
+    const field = Object.keys(err.fields ?? {})[0] || 'value';
+    const value = err.fields?.[field];
     return res.status(409).json({ success: false, message: `${label(field)}${value ? ` "${value}"` : ''} is already in use` });
   }
-  if (err.name === 'ValidationError') {
-    const first = Object.values(err.errors || {})[0];
-    return res.status(400).json({ success: false, message: first ? `${label(first.path)} ${first.kind === 'required' ? 'is required' : 'is not valid'}` : 'Validation failed' });
+  if (err instanceof ValidationError) {
+    const first = err.errors[0];
+    return res.status(400).json({ success: false, message: first?.path ? `${label(first.path)} is not valid` : 'Validation failed' });
+  }
+  if (['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT'].includes(err.original?.code)) {
+    return res.status(409).json({ success: false, message: 'The record is being updated. Try again.' });
   }
 
   const status = err.status || 500;
-  if (status >= 500) console.error(err);
+  if (status >= 500) console.error(err instanceof BaseError ? `${err.name}: ${err.original?.code || 'database error'}` : err);
   res.status(status).json({
     success: false,
     message: status >= 500 && process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,

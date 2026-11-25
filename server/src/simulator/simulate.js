@@ -8,6 +8,7 @@
  *   npm run simulate -- --auto=5        # keep at least 5
  */
 import { io } from 'socket.io-client';
+import { env } from '../config/env.js';
 import { moveToward, bearing } from '../utils/geo.js';
 import { CITIES } from '../seed/cities.js';
 
@@ -28,6 +29,7 @@ const CUSTOMERS = ['Aarav Mehta', 'Priya Nair', 'Rohan Das', 'Sneha Iyer', 'Kabi
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 let token;
+let socket;
 async function call(path, options = {}) {
   const res = await fetch(`${API}/api/v1${path}`, {
     ...options,
@@ -41,12 +43,6 @@ async function call(path, options = {}) {
 const login = async () => {
   token = (await call('/auth/login', { method: 'POST', body: JSON.stringify({ email: EMAIL, password: PASSWORD }) })).data.accessToken;
 };
-await login();
-
-const socket = io(API, { auth: (cb) => cb({ token }) });
-socket.on('connect', () => console.log('Simulator connected'));
-socket.on('connect_error', (e) => console.log('Socket error:', e.message));
-
 const trips = new Map(); // shipmentId -> { vehicleId, pos, target, plate }
 
 async function loadTrips() {
@@ -122,7 +118,23 @@ async function tick() {
   }
 }
 
-await refresh();
-if (!trips.size) console.log(AUTO ? 'No In Transit shipments yet; auto-dispatch will book some shortly.' : 'No In Transit shipments yet. Run `npm run seed`, move a shipment to In Transit in the UI, or start with --auto. Watching...');
-setInterval(refresh, 10000);
-setInterval(tick, INTERVAL);
+async function start() {
+  if (!env.demoMode) throw new Error('The GPS simulator requires DEMO_MODE=true and a demo API.');
+  if ((await call('/health')).demoMode !== true) throw new Error('The target API has demo mode disabled.');
+  await login();
+
+  socket = io(API, { auth: (cb) => cb({ token }) });
+  socket.on('connect', () => console.log('Simulator connected'));
+  socket.on('connect_error', (e) => console.log('Socket error:', e.message));
+
+  await refresh();
+  if (!trips.size) console.log(AUTO ? 'No In Transit shipments yet; auto-dispatch will book some shortly.' : 'No In Transit shipments yet. Run `npm run seed`, move a shipment to In Transit in the UI, or start with --auto. Watching...');
+  setInterval(refresh, 10000);
+  setInterval(tick, INTERVAL);
+}
+
+await start().catch((error) => {
+  socket?.disconnect();
+  console.error(error.message);
+  process.exitCode = 1;
+});

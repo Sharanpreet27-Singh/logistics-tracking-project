@@ -1,16 +1,14 @@
-import mongoose from 'mongoose';
+import { DataTypes } from 'sequelize';
+import { sequelize } from '../config/db.js';
 import { ALERT_TYPES } from './constants.js';
+import { idColumn } from './id.js';
 
-const alertSchema = new mongoose.Schema(
-  {
-    type: { type: String, enum: ALERT_TYPES, required: true },
-    severity: { type: String, enum: ['info', 'warning', 'critical'], default: 'warning' },
-    message: { type: String, required: true },
-    vehicle: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle' },
-    shipment: { type: mongoose.Schema.Types.ObjectId, ref: 'Shipment' },
-    isRead: { type: Boolean, default: false, index: true },
-  },
-  { timestamps: true }
-);
-
-export const Alert = mongoose.model('Alert', alertSchema);
+export const Alert = sequelize.define('Alert', {
+  _id: idColumn(),
+  type: { type: DataTypes.ENUM(...ALERT_TYPES), allowNull: false },
+  severity: { type: DataTypes.ENUM('info', 'warning', 'critical'), allowNull: false, defaultValue: 'warning' },
+  message: { type: DataTypes.TEXT, allowNull: false },
+  vehicle: DataTypes.STRING(36),
+  shipment: DataTypes.STRING(36),
+  isRead: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+}, { tableName: 'alerts', indexes: [{ fields: ['isRead', 'createdAt'] }, { fields: ['vehicle', 'type', 'createdAt'] }] });

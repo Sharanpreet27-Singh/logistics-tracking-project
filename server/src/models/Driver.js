@@ -1,18 +1,16 @@
-import mongoose from 'mongoose';
+import { DataTypes } from 'sequelize';
+import { sequelize } from '../config/db.js';
 import { DRIVER_STATUSES } from './constants.js';
+import { idColumn } from './id.js';
 
-const driverSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true, trim: true },
-    phone: { type: String, required: true, trim: true },
-    email: { type: String, lowercase: true, trim: true },
-    licenseNo: { type: String, required: true, unique: true, uppercase: true, trim: true },
-    licenseExpiry: Date,
-    status: { type: String, enum: DRIVER_STATUSES, default: 'available', index: true },
-    rating: { type: Number, min: 0, max: 5, default: 4 },
-    assignedVehicle: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', default: null },
-  },
-  { timestamps: true }
-);
-
-export const Driver = mongoose.model('Driver', driverSchema);
+export const Driver = sequelize.define('Driver', {
+  _id: idColumn(),
+  name: { type: DataTypes.STRING(80), allowNull: false },
+  phone: { type: DataTypes.STRING(24), allowNull: false },
+  email: DataTypes.STRING(254),
+  licenseNo: { type: DataTypes.STRING(30), allowNull: false, unique: true },
+  licenseExpiry: DataTypes.DATE,
+  status: { type: DataTypes.ENUM(...DRIVER_STATUSES), allowNull: false, defaultValue: 'available' },
+  rating: { type: DataTypes.DOUBLE, allowNull: false, defaultValue: 4 },
+  assignedVehicle: DataTypes.STRING(36),
+}, { tableName: 'drivers', indexes: [{ fields: ['status'] }] });

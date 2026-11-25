@@ -1,34 +1,25 @@
-import mongoose from 'mongoose';
+import { DataTypes } from 'sequelize';
+import { sequelize } from '../config/db.js';
 import { SHIPMENT_STATUSES } from './constants.js';
+import { idColumn } from './id.js';
 
-const place = new mongoose.Schema(
-  { address: { type: String, required: true }, lat: { type: Number, required: true }, lng: { type: Number, required: true } },
-  { _id: false }
-);
-
-const shipmentSchema = new mongoose.Schema(
-  {
-    trackingId: { type: String, required: true, unique: true, index: true },
-    customerName: { type: String, required: true, trim: true },
-    customerPhone: String,
-    pickup: { type: place, required: true },
-    delivery: { type: place, required: true },
-    weightKg: { type: Number, default: 0 },
-    status: { type: String, enum: SHIPMENT_STATUSES, default: 'Created', index: true },
-    vehicle: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', default: null },
-    driver: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver', default: null },
-    distanceKm: { type: Number, default: 0 },
-    eta: Date,
-    deliveredAt: Date,
-    timeline: [
-      new mongoose.Schema(
-        { status: String, note: String, at: { type: Date, default: Date.now } },
-        { _id: false }
-      ),
-    ],
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  },
-  { timestamps: true }
-);
-
-export const Shipment = mongoose.model('Shipment', shipmentSchema);
+export const Shipment = sequelize.define('Shipment', {
+  _id: idColumn(),
+  trackingId: { type: DataTypes.STRING(19), allowNull: false, unique: true },
+  customerName: { type: DataTypes.STRING(80), allowNull: false },
+  customerPhone: DataTypes.STRING(24),
+  pickup: { type: DataTypes.JSON, allowNull: false },
+  delivery: { type: DataTypes.JSON, allowNull: false },
+  weightKg: { type: DataTypes.DOUBLE, allowNull: false, defaultValue: 0 },
+  status: { type: DataTypes.ENUM(...SHIPMENT_STATUSES), allowNull: false, defaultValue: 'Created' },
+  vehicle: DataTypes.STRING(36),
+  driver: DataTypes.STRING(36),
+  distanceKm: { type: DataTypes.DOUBLE, allowNull: false, defaultValue: 0 },
+  eta: DataTypes.DATE(3),
+  deliveredAt: DataTypes.DATE(3),
+  timeline: { type: DataTypes.JSON, allowNull: false, defaultValue: () => [] },
+  createdBy: DataTypes.STRING(36),
+}, {
+  tableName: 'shipments',
+  indexes: [{ fields: ['status', 'deliveredAt'] }, { fields: ['vehicle', 'status'] }, { fields: ['driver', 'status'] }, { fields: ['createdAt'] }],
+});

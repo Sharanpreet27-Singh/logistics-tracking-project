@@ -1,6 +1,6 @@
 @echo off
 rem Starts FleetTrack for local development in three terminal windows (API, client, GPS simulator).
-rem Needs Node 18+ and MongoDB running (the MongoDB installer sets it up as a Windows service).
+rem Needs Node 18+ and a configured MySQL demo database.
 rem Double-click this file or run it from a terminal. Close the three windows to stop.
 
 cd /d "%~dp0.."
@@ -12,6 +12,8 @@ if not exist server\node_modules (
 )
 if not exist server\.env copy server\.env.example server\.env >nul
 if not exist client\.env copy client\.env.example client\.env >nul
+
+call npm run db:init || exit /b 1
 
 start "FleetTrack API (http://localhost:5000)" cmd /k "cd /d server && npm run dev"
 start "FleetTrack client (http://localhost:5173)" cmd /k "cd /d client && npm run dev"

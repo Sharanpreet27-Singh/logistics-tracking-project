@@ -1,22 +1,23 @@
-import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { DataTypes } from 'sequelize';
+import { sequelize } from '../config/db.js';
 import { ROLES } from './constants.js';
+import { idColumn } from './id.js';
 
-const userSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String, required: true, select: false },
-    role: { type: String, enum: ROLES, default: 'dispatcher' },
-    isActive: { type: Boolean, default: true },
-    lastLogin: Date,
-  },
-  { timestamps: true }
-);
+export const User = sequelize.define('User', {
+  _id: idColumn(),
+  name: { type: DataTypes.STRING, allowNull: false },
+  email: { type: DataTypes.STRING(254), allowNull: false, unique: true },
+  passwordHash: { type: DataTypes.STRING(60), allowNull: false },
+  role: { type: DataTypes.ENUM(...ROLES), allowNull: false, defaultValue: 'dispatcher' },
+  isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+  lastLogin: DataTypes.DATE(3),
+}, {
+  tableName: 'users',
+  defaultScope: { attributes: { exclude: ['passwordHash'] } },
+});
 
-userSchema.methods.verifyPassword = function (plain) {
-  return bcrypt.compare(plain, this.passwordHash);
+User.hash = (password) => bcrypt.hash(password, 12);
+User.prototype.verifyPassword = function (password) {
+  return bcrypt.compare(password, this.passwordHash);
 };
-userSchema.statics.hash = (plain) => bcrypt.hash(plain, 12);
-
-export const User = mongoose.model('User', userSchema);

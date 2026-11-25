@@ -10,13 +10,16 @@ fi
 
 echo "==> Installing server dependencies"
 npm ci --prefix server --omit=dev
+if [ "${INIT_SCHEMA:-0}" = "1" ]; then
+  npm run db:init
+fi
 
 echo "==> Building client"
 npm ci --prefix client
 npm run build --prefix client
 
 echo "==> Starting API (serves the client build too)"
-pm2 startOrReload deploy/ecosystem.config.cjs --update-env
+pm2 startOrReload deploy/ecosystem.config.cjs --only fleettrack-api --update-env
 pm2 save >/dev/null
 
 echo "Done. Health: curl -s http://127.0.0.1:5000/api/v1/health"

@@ -10,6 +10,7 @@ const DEMO = [
   { label: 'Manager', name: 'Fleet Manager', email: 'manager@fleet.com', password: 'Manager@123', note: 'Fleet + reports' },
   { label: 'Dispatcher', name: 'Dispatch Desk', email: 'dispatcher@fleet.com', password: 'Dispatch@123', note: 'Fleet + reports' },
 ];
+const SHOW_DEMO_ACCOUNTS = import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true';
 
 const LIME = '#C9F55B';
 const VIOLET = '#7C3AED';
@@ -261,22 +262,24 @@ export default function Login() {
             {!busy && <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />}
           </button>
 
-          <div className="mt-6 rounded-2xl bg-[#F6F7F9] p-4">
-            <p className="text-xs font-semibold">Try a demo account</p>
-            <p className="help mt-0.5">Click one to fill in the form (available after <code>npm run seed</code>).</p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {DEMO.map((d) => {
-                const active = email === d.email;
-                return (
-                  <button type="button" key={d.label} onClick={() => { setEmail(d.email); setPassword(d.password); }} className={`rounded-xl border p-2.5 text-left text-xs transition-all ${active ? 'border-ink bg-white shadow-card' : 'border-transparent bg-white/70 hover:border-line hover:bg-white'}`}>
-                    <Avatar name={d.name} size={26} />
-                    <span className="mt-2 block font-semibold">{d.label}</span>
-                    <span className="block text-ink-soft">{d.note}</span>
-                  </button>
-                );
-              })}
+          {SHOW_DEMO_ACCOUNTS && (
+            <div className="mt-6 rounded-2xl bg-[#F6F7F9] p-4">
+              <p className="text-xs font-semibold">Try a demo account</p>
+              <p className="help mt-0.5">Click one to fill in the form (available after <code>npm run seed</code>).</p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {DEMO.map((d) => {
+                  const active = email === d.email;
+                  return (
+                    <button type="button" key={d.label} onClick={() => { setEmail(d.email); setPassword(d.password); }} className={`rounded-xl border p-2.5 text-left text-xs transition-all ${active ? 'border-ink bg-white shadow-card' : 'border-transparent bg-white/70 hover:border-line hover:bg-white'}`}>
+                      <Avatar name={d.name} size={26} />
+                      <span className="mt-2 block font-semibold">{d.label}</span>
+                      <span className="block text-ink-soft">{d.note}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           <p className="mt-6 text-center text-sm text-ink-soft">
             Waiting on a parcel? <Link className="font-semibold text-ink underline decoration-2 underline-offset-4" style={{ textDecorationColor: LIME }} to="/track">Track a shipment</Link>

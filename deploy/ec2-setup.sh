@@ -6,9 +6,10 @@
 #     bash ec2-setup.sh                       # uses the repo above
 #     bash ec2-setup.sh <your-fork-git-url>   # or your own fork
 #
-#   Set SKIP_MONGO=1 to skip the local MongoDB install (when you use MongoDB Atlas instead).
+#   The first run creates server/.env and downloads the RDS certificate bundle.
+#   Enter your RDS MySQL settings in server/.env, then rerun the script.
 #
-# Installs Node 20, MongoDB 8 (optional), Nginx and PM2, clones the repo into /opt/fleettrack,
+# Installs Node 20, Nginx and PM2, clones the repo into /opt/fleettrack,
 # generates JWT secrets, builds the client, starts the API under PM2 and puts Nginx in front on port 80.
 set -euo pipefail
 
@@ -26,19 +27,6 @@ if ! command -v node >/dev/null || [ "$(node -v | cut -c2-3)" -lt 18 ]; then
 fi
 node -v && npm -v
 
-if [ "${SKIP_MONGO:-0}" != "1" ]; then
-  echo "==> MongoDB 8"
-  if ! command -v mongod >/dev/null; then
-    . /etc/os-release
-    curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
-    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu ${VERSION_CODENAME}/mongodb-org/8.0 multiverse" \
-      | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list >/dev/null
-    sudo apt-get update -y
-    sudo apt-get install -y mongodb-org
-  fi
-  sudo systemctl enable --now mongod
-fi
-
 echo "==> PM2"
 sudo npm install -g pm2 >/dev/null
 
@@ -51,19 +39,24 @@ fi
 cd "$APP_DIR"
 
 echo "==> Environment file"
+mkdir -p server/certs
+if [ ! -s server/certs/rds-global-bundle.pem ]; then
+  curl -fsSL --remove-on-error https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o server/certs/rds-global-bundle.pem
+fi
 if [ ! -f server/.env ]; then
-  cp server/.env.production.example server/.env
+  install -m 600 server/.env.production.example server/.env
   sed -i "s|^JWT_ACCESS_SECRET=.*|JWT_ACCESS_SECRET=$(openssl rand -hex 32)|" server/.env
   sed -i "s|^JWT_REFRESH_SECRET=.*|JWT_REFRESH_SECRET=$(openssl rand -hex 32)|" server/.env
   # Public address of this instance (IMDSv2), used for CORS. Replace with your domain later.
   TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60" || true)
   PUBLIC_IP=$(curl -s -H "X-aws-ec2-metadata-token: ${TOKEN}" http://169.254.169.254/latest/meta-data/public-ipv4 || true)
   if [ -n "$PUBLIC_IP" ]; then sed -i "s|^CLIENT_URL=.*|CLIENT_URL=http://${PUBLIC_IP}|" server/.env; fi
-  echo "    wrote server/.env (secrets generated). Edit MONGO_URI there if you use Atlas."
+  echo "    Set DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD in $APP_DIR/server/.env, then rerun this script."
+  exit 0
 fi
 
 echo "==> Build and start"
-bash deploy/deploy.sh
+NO_PULL=1 INIT_SCHEMA=1 bash deploy/deploy.sh
 
 echo "==> Nginx"
 sudo cp deploy/nginx.conf /etc/nginx/sites-available/fleettrack
@@ -83,6 +76,7 @@ FleetTrack is running.
   Site:      http://${PUBLIC_IP:-<instance-public-ip>}
   API check: http://${PUBLIC_IP:-<instance-public-ip>}/api/v1/health
   Logs:      pm2 logs fleettrack-api
-  Demo data: cd $APP_DIR/server && npm run seed      (wipes the database!)
+  First admin: add ADMIN_NAME, ADMIN_EMAIL and ADMIN_PASSWORD to $APP_DIR/server/.env
+               then run npm run admin:create from $APP_DIR and remove those values.
   Updates:   cd $APP_DIR && bash deploy/deploy.sh
 EOF

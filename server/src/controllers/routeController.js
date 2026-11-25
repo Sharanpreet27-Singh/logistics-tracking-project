@@ -5,7 +5,7 @@ import { estimateMinutes, optimizeStops } from '../utils/geo.js';
 import { optimizeSchema } from '../validators/schemas.js';
 
 export const shipmentRoute = asyncHandler(async (req, res) => {
-  const s = await Shipment.findById(req.params.shipmentId).lean();
+  const s = await Shipment.findByPk(req.params.shipmentId);
   if (!s) throw new ApiError(404, 'Shipment not found');
   res.json({
     success: true,

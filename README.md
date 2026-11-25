@@ -4,7 +4,7 @@
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3-38BDF8?logo=tailwindcss&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=nodedotjs&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-6--8-47A248?logo=mongodb&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?logo=mysql&logoColor=white)
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?logo=socketdotio&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-optional-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -40,7 +40,7 @@ The UI follows a warm "delivery app" look: cream background, yellow accents, a w
 
 ## 🚀 Quick Start
 
-**Prerequisites:** Node.js 18 or newer (tested on 20 and 24), npm, and MongoDB 6, 7 or 8 running locally (or a MongoDB Atlas URI). On Windows the MongoDB installer sets it up as a service that starts with the machine, so nothing else is needed. Docker is optional.
+Install Node.js 18 or newer and npm. For the demo, create a disposable MySQL database named `fleet_tracking_demo` and a database user with access to it. To use a real fleet database on AWS, follow [Start with real fleet data](#start-with-real-fleet-data).
 
 ### Option A: one command from the repo root (recommended)
 
@@ -49,7 +49,9 @@ npm install          # root launcher tools (concurrently, wait-on)
 npm run setup        # installs server/ and client/ dependencies
 cp server/.env.example server/.env
 cp client/.env.example client/.env
-npm run seed         # creates demo users, vehicles, drivers and shipments (wipes the database!)
+# Set DB_USER and DB_PASSWORD in server/.env.
+npm run db:init
+npm run seed         # resets the demo tables and inserts sample records
 npm run dev:all      # API on :5000, client on :5173, and the GPS simulator, all in one terminal
 ```
 
@@ -62,6 +64,8 @@ Other root scripts: `npm run dev` (API + client, no simulator), `npm run simulat
 cd server
 npm install
 cp .env.example .env
+# Set DB_USER and DB_PASSWORD in .env.
+npm run db:init
 npm run seed        # creates demo users, vehicles, drivers and shipments
 npm run dev         # API + sockets on http://localhost:5000
 
@@ -78,7 +82,7 @@ npm run simulate
 
 ### Option C: one double-click (Windows) or one script (macOS / Linux)
 
-`scripts\start-local.cmd` installs what is missing, creates the `.env` files, opens three terminal windows (API, client, simulator) and opens the browser. On macOS / Linux run `bash scripts/start-local.sh`, which does the same in one terminal. Run `npm run seed` once for demo data.
+Configure the MySQL demo credentials in `server/.env` and run `npm run db:init` and `npm run seed`. Use `scripts\start-local.cmd` on Windows or `bash scripts/start-local.sh` on macOS and Linux to start the API, client, and simulator.
 
 ### Try the production build locally
 
@@ -88,7 +92,31 @@ npm run serve      # builds the client, then the API serves it at http://localho
 
 This is exactly what runs on a server: one Node process serving both the API and the built client (`SERVE_CLIENT=true`).
 
-### Sign in
+### Start with real fleet data
+
+Install the dependencies and create or select a MySQL database in Amazon RDS. Copy `server/.env.production.example` to `server/.env` for a new install. Fill in the connection settings from your RDS instance and MySQL user. [Amazon RDS connection guide](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ConnectToInstance.html)
+
+| Setting | Value |
+|---|---|
+| `DB_HOST`, `DB_PORT` | RDS endpoint hostname and port (typically `3306`) |
+| `DB_NAME` | MySQL database name, for example `fleet_tracking_live` |
+| `DB_USER`, `DB_PASSWORD` | MySQL database username and password |
+| `DB_SSL`, `DB_SSL_CA` | `true` and `certs/rds-global-bundle.pem` |
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | Two distinct random strings. Run `node -p "require('crypto').randomBytes(48).toString('hex')"` twice to generate them. |
+| `HOST` | `127.0.0.1` for access from this computer |
+| `CLIENT_URL` | `http://localhost:5000` for a local server, or your site's HTTPS origin when deployed |
+| `NODE_ENV`, `SERVE_CLIENT` | `production`, `true` |
+| `DEMO_MODE`, `TRUST_PROXY` | `false` and `0` for a local server. The EC2 setup uses `TRUST_PROXY=1` behind Nginx. |
+
+Download the RDS CA bundle to `server/certs/rds-global-bundle.pem`. The API validates the database endpoint and certificate over TLS. The machine running FleetTrack needs a network route to RDS and access to its MySQL port through the RDS security group. [AWS certificate bundles](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html) · [AWS RDS connectivity](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ConnectToInstance.html)
+
+Run `npm run db:init` from the project root with credentials that can create tables, indexes, and foreign keys in the database. This command can be rerun and preserves existing MySQL records. For an established schema, the API uses ordinary read and write access.
+
+Add `ADMIN_NAME` (your full name), `ADMIN_EMAIL` (your work email), and `ADMIN_PASSWORD` (a unique password of at least 15 characters and at most 72 UTF-8 bytes) to `server/.env`. Quote values with spaces or `#`. Run `npm run admin:create` once from the root, then remove the three `ADMIN_*` values. The command creates an admin account in the configured database and preserves any existing account with the same email.
+
+Run `npm run serve` and sign in at [http://localhost:5000](http://localhost:5000). Start by adding your vehicles and drivers, then create shipments. A vehicle appears on the map after its first position arrives from a GPS device gateway. Native installs read `server/.env`. The root `.env` is for Docker Compose, and `client/.env` is for browser-facing settings.
+
+### Sign in to the demo
 
 Open **http://localhost:5173**. The login page has one-click demo-account chips, or type:
 
@@ -111,7 +139,8 @@ Then open **Live tracking** to see the four seeded trucks driving toward their d
 | Red overlay in the browser: *"The `bg-cream` class does not exist"* | The Vite dev server was started before `client/tailwind.config.js` changed and kept the old config in memory. Stop the client (`Ctrl+C`) and start it again. |
 | Production site shows a blank page or missing fonts/tiles | Check the browser console for Content-Security-Policy errors; the allowed sources are set in `server/src/app.js`. Make sure `CLIENT_URL` in `server/.env` is the address you open in the browser. |
 | `Port 5173 is already in use` | A previous dev server is still running. Close that terminal, or on Windows run `netstat -ano \| findstr :5173` and then `taskkill /PID <pid> /F`. |
-| API prints `MongooseServerSelectionError` | MongoDB is not running or `MONGO_URI` is wrong. On Windows run `sc query MongoDB`; start it with `net start MongoDB`. |
+| MySQL connection fails | Check the endpoint, port, database name, username and password. For RDS, also check the network route, security group and `DB_SSL_CA`. |
+| FleetTrack MySQL schema is incomplete | Run `npm run db:init` using a MySQL user with schema creation privileges. |
 | Simulator says `No In Transit shipments yet` | Every shipment has been delivered. With `npm run dev:all` the simulator books new trips by itself within 10 seconds; otherwise create and dispatch one in the UI, or run `npm run seed` to reset the demo data. |
 | Map tiles are blank | Tiles come from `server.arcgisonline.com` (Esri) and need internet access. To use another provider, set `VITE_MAP_TILE_URL` in `client/.env`. |
 | Top bar shows **Reconnecting** | The client lost its socket to the API. Make sure the API is running on port 5000 and that `client/.env` points to it. |
@@ -191,7 +220,7 @@ flowchart LR
         SK[Socket.IO server]
     end
 
-    DB[(MongoDB)]
+    DB[(MySQL / Amazon RDS)]
     GPS[GPS device / simulator]
 
     UI -->|REST via Axios| RT
@@ -201,7 +230,7 @@ flowchart LR
     SK --> DB
 ```
 
-Request flow: `Route → authenticate/authorize → controller (zod-validated) → Mongoose model`. Controllers emit Socket.IO events after changes so every open dashboard stays in sync.
+Requests pass through authentication and authorization to controllers and Sequelize models backed by MySQL. Controllers publish Socket.IO updates after database commits.
 
 ---
 
@@ -225,7 +254,7 @@ Request flow: `Route → authenticate/authorize → controller (zod-validated) �
 | Technology | Purpose |
 |---|---|
 | Node.js 18+ / Express 4 | REST API |
-| MongoDB + Mongoose 8 | Database and models |
+| MySQL + Sequelize + mysql2 | Relational storage and MySQL driver for Amazon RDS |
 | Socket.IO 4 | Real-time communication |
 | jsonwebtoken + bcryptjs | Authentication, password hashing |
 | Zod | Request validation |
@@ -235,7 +264,7 @@ Request flow: `Route → authenticate/authorize → controller (zod-validated) �
 
 ### Tooling
 - Root `package.json` uses `concurrently` and `wait-on` to run the API, client and simulator from one terminal.
-- Docker and Docker Compose (MongoDB, API, Nginx-served client) are available but optional. Nginx proxies `/api` and `/socket.io` to the API.
+- Docker Compose runs the API and Nginx-served client. The API connects to RDS MySQL, and Nginx proxies `/api` and `/socket.io`.
 - GitHub Actions workflow in `.github/workflows/ci.yml`.
 
 ---
@@ -368,7 +397,13 @@ Admin, manager and dispatcher are all operations roles with the same day-to-day 
 ```env
 NODE_ENV=development
 PORT=5000
-MONGO_URI=mongodb://localhost:27017/fleet_tracking
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=fleet_tracking_demo
+DB_USER=fleettrack
+DB_PASSWORD=
+DB_SSL=false
+DEMO_MODE=true
 JWT_ACCESS_SECRET=change_me_access
 JWT_REFRESH_SECRET=change_me_refresh
 JWT_ACCESS_EXPIRES=15m
@@ -378,7 +413,7 @@ CLIENT_URL=http://localhost:5173
 
 Optional: `REPORT_TZ=Asia/Kolkata` sets the time zone used to group deliveries by day on the dashboard and reports (default: the server's own zone).
 
-In production the server refuses to start while the JWT secrets still contain `change_me`.
+In production the JWT secrets must be distinct, at least 32 characters long, and use generated values. `DEMO_MODE=true` enables demo seeding and simulation. Use it only with a disposable demo database.
 
 **`client/.env.production`** (committed) points the production build at relative URLs (`/api/v1`, same-origin sockets), so the build works wherever it is served from.
 
@@ -387,21 +422,23 @@ In production the server refuses to start while the JWT secrets still contain `c
 ```env
 VITE_API_BASE_URL=http://localhost:5000/api/v1
 VITE_SOCKET_URL=http://localhost:5000
+VITE_SHOW_DEMO_ACCOUNTS=true
 # Optional: replace the street basemap with any XYZ tile provider
 # VITE_MAP_TILE_URL=https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=YOUR_KEY
 # VITE_MAP_TILE_ATTR=&copy; MapTiler &copy; OpenStreetMap contributors
 ```
 
-Vite reads `client/.env` at start-up, so restart the client after changing it. Never commit real `.env` files.
+Vite reads `client/.env` at start-up, so restart the client after changing it. Set `VITE_SHOW_DEMO_ACCOUNTS=false` for real-data development. The production build hides the demo sign-in shortcuts by default. Keep credentials in `server/.env` and leave that file out of version control.
 
 ---
 
 ## 🐳 Running with Docker
 
-Docker is optional; the Quick Start above runs everything natively. If you prefer containers:
+Copy `.env.example` to the root `.env`, set the RDS connection and JWT secrets, and download the RDS CA bundle. Compose binds the certificate into the server container using `DB_SSL_CA_PATH`.
 
 ```bash
-cp .env.example .env          # set two long random JWT secrets
+docker compose build
+docker compose run --rm server npm run db:init
 docker compose up --build
 ```
 
@@ -410,18 +447,18 @@ docker compose up --build
 | App (Nginx) | http://localhost:3000 |
 | API | http://localhost:5000/api/v1/health |
 
-Load demo data into the containerized database:
+For a demo, point the root `.env` at a disposable MySQL database and set `DEMO_MODE=true` before bringing the stack up.
 
 ```bash
-docker compose exec server node src/seed/seed.js
-docker compose exec server node src/simulator/simulate.js
+docker compose exec server npm run seed
+docker compose exec server npm run simulate
 ```
 
 ---
 
 ## 🛰️ GPS Simulator
 
-`npm run simulate` (from the root or from `server/`) logs in as the admin, finds every **In Transit** shipment, and drives its vehicle toward the destination, pushing `vehicle:location` events exactly like a real GPS unit. It re-scans for new In Transit shipments every 10 seconds, marks each shipment **Delivered** on arrival, and occasionally spikes above 80 km/h to trigger speeding alerts.
+`npm run simulate` (from the root or from `server/`) requires `DEMO_MODE=true` in both its configuration and the target API. It logs in as the demo admin, finds every **In Transit** shipment, and drives its vehicle toward the destination, pushing `vehicle:location` events. It re-scans for new In Transit shipments every 10 seconds, marks each shipment **Delivered** on arrival, and occasionally spikes above 80 km/h to trigger speeding alerts.
 
 ```bash
 npm run simulate -- --interval=2000 --speedup=40 --vehicles=10
@@ -429,7 +466,7 @@ npm run simulate -- --interval=2000 --speedup=40 --vehicles=10
 
 `--interval` is the milliseconds between position updates, `--speedup` multiplies real driving speed so a trip finishes in minutes, and `--vehicles` caps how many trucks move at once. Add `--auto` (or `--auto=5`) for demo mode: whenever fewer than three (or five) trips are on the road, the simulator books a new shipment between two cities, assigns a free vehicle and driver, and sends it out, so the live map never goes quiet. `npm run dev:all` starts the simulator in this mode. Override credentials with `SIM_EMAIL`, `SIM_PASSWORD` and `API_URL`.
 
-To connect real hardware, have your device gateway authenticate and emit the same `vehicle:location` event.
+To connect real hardware, configure a gateway for your tracker or GPS provider. The gateway authenticates with the API, connects to Socket.IO using the access token, and emits `vehicle:location` with the FleetTrack vehicle ID, latitude, longitude, speed in km/h, and heading. Provider credentials belong with the gateway.
 
 ---
 
@@ -440,7 +477,7 @@ npm test             # from the root, or: cd server && npm test
 npm run build        # client production build; also catches Tailwind/JSX errors
 ```
 
-Server tests currently cover the geo utilities (distance, movement, route ordering, ETA). Adding API tests (Jest + Supertest) and client tests (Vitest) is on the roadmap.
+Server tests cover the geo utilities. CI also runs the MySQL integration test against a disposable MySQL 8.4 database. To run that test locally, initialize a dedicated test database, set its `DB_*` variables, and run `npm test` with `NODE_ENV=test`, `DEMO_MODE=false` and `MYSQL_INTEGRATION_TEST=1`.
 
 ---
 
@@ -450,7 +487,7 @@ Server tests currently cover the geo utilities (distance, movement, route orderi
 - Short-lived JWT access tokens plus refresh tokens; sockets use the same JWT.
 - Role checks on every protected route; unknown body fields are stripped by zod (no mass assignment). Validation errors come back as readable sentences, e.g. "Customer phone must contain 7 to 15 digits".
 - Helmet headers, CORS limited to `CLIENT_URL`, JSON body limit, rate limiting on login and refresh.
-- Query filters are whitelisted and typed; search input is regex-escaped.
+- Query filters use a field allowlist, and search matches literal text.
 - Public tracking exposes only customer-safe fields: no customer name or phone, no internal timeline notes, and the driver's first name only. Tracking IDs carry six random characters and the endpoint is rate limited, so IDs cannot be enumerated.
 - Secrets come from environment variables; `.env` is git-ignored.
 
@@ -462,19 +499,19 @@ Before real production use also add HTTPS (Nginx/TLS), refresh-token revocation,
 
 ### Deploy to AWS EC2 (no Docker)
 
-One small instance runs everything: Nginx on port 80 in front of the Node API, which also serves the built client, and MongoDB on the same box (or MongoDB Atlas). The scripts live in `deploy/`.
+The EC2 instance runs Nginx and Node, which serves the API and built client. FleetTrack connects to an Amazon RDS MySQL instance. The scripts live in `deploy/`.
 
-1. **Launch an instance.** Ubuntu Server 22.04 or 24.04, `t3.small` or larger (t3.micro works for a demo), 20 GB disk. In the security group allow inbound **22** (SSH, your IP only), **80** and **443**. Keep MongoDB's port 27017 closed.
+1. **Launch an instance.** Use Ubuntu Server 22.04 or 24.04. Allow SSH and web traffic to EC2 as needed. Configure the RDS security group to allow MySQL access from the EC2 application security group. [AWS RDS connectivity](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ConnectToInstance.html)
 2. **Connect** with SSH: `ssh -i your-key.pem ubuntu@<public-ip>`.
-3. **Run the setup script** (installs Node 20, MongoDB 8, Nginx and PM2, clones the repo into `/opt/fleettrack`, generates JWT secrets, builds the client and starts the API):
+3. Run the setup script. On the first run it installs Node, Nginx and PM2, clones the repo into `/opt/fleettrack`, generates JWT secrets and downloads the RDS certificate bundle.
 
    ```bash
    curl -fsSL https://raw.githubusercontent.com/Sharanpreet27-Singh/logistics-tracking-project/main/deploy/ec2-setup.sh -o ec2-setup.sh
    bash ec2-setup.sh
    ```
 
-   Using MongoDB Atlas instead? Run `SKIP_MONGO=1 bash ec2-setup.sh`, then put your Atlas connection string in `/opt/fleettrack/server/.env` as `MONGO_URI` and run `pm2 restart fleettrack-api`.
-4. **Open** `http://<public-ip>`. Load demo data with `cd /opt/fleettrack/server && npm run seed` (wipes the database) and sign in with the demo accounts. For moving trucks on a demo instance: `pm2 start deploy/ecosystem.config.cjs --only fleettrack-simulator`.
+   Enter the `DB_*` settings in `/opt/fleettrack/server/.env`, then rerun `bash ec2-setup.sh` to initialize the database schema, build the client, and start the API.
+4. Add your `ADMIN_*` values to `/opt/fleettrack/server/.env` and run `npm run admin:create` from `/opt/fleettrack`. Remove the `ADMIN_*` values once the account is created. Sign in after HTTPS is configured.
 5. **Updates:** `cd /opt/fleettrack && bash deploy/deploy.sh` pulls, rebuilds and reloads with zero downtime.
 6. **HTTPS:** point a domain at the instance, set `CLIENT_URL=https://your-domain.com` in `server/.env`, then `sudo apt-get install -y certbot python3-certbot-nginx && sudo certbot --nginx -d your-domain.com`.
 

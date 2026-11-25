@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { Server } from 'socket.io';
+import { sequelize } from '../config/db.js';
 import { env } from '../config/env.js';
 import { Vehicle } from '../models/Vehicle.js';
 import { locationSchema } from '../validators/schemas.js';
@@ -34,26 +35,24 @@ export function initSockets(httpServer) {
       if (!parsed.success) return;
       const { vehicleId, lat, lng, speed, heading } = parsed.data;
       try {
-        // Moving when there is speed; a halted truck becomes "stopped" but a booked/idle one keeps its status.
-        const vehicle = await Vehicle.findOneAndUpdate(
-          { _id: vehicleId, status: { $ne: 'maintenance' } },
-          [{ $set: {
-            location: { lat, lng }, speed, heading, lastUpdated: new Date(),
-            status: { $cond: [{ $gt: [speed, 0] }, 'moving', { $cond: [{ $eq: ['$status', 'moving'] }, 'stopped', '$status'] }] },
-          } }],
-          { new: true }
-        );
-        if (!vehicle) return;
-        emit('vehicle:location', { vehicleId, lat, lng, speed, heading, status: vehicle.status, timestamp: vehicle.lastUpdated });
-        if (speed > SPEED_LIMIT_KMH) {
-          await createAlert({
-            type: 'speeding',
-            severity: 'warning',
-            message: `${vehicle.registrationNo} is travelling at ${Math.round(speed)} km/h`,
-            vehicle: vehicle._id,
-            dedupeMinutes: 5,
-          });
-        }
+        const vehicle = await sequelize.transaction(async (transaction) => {
+          const record = await Vehicle.findByPk(vehicleId, { transaction, lock: true });
+          if (!record || record.status === 'maintenance') return null;
+          // A halted moving vehicle becomes stopped. A booked or idle vehicle keeps its status.
+          const status = speed > 0 ? 'moving' : (record.status === 'moving' ? 'stopped' : record.status);
+          await record.update({ location: { lat, lng }, speed, heading, lastUpdated: new Date(), status }, { transaction });
+          if (speed > SPEED_LIMIT_KMH) {
+            await createAlert({
+              type: 'speeding',
+              severity: 'warning',
+              message: `${record.registrationNo} is travelling at ${Math.round(speed)} km/h`,
+              vehicle: record._id,
+              dedupeMinutes: 5,
+            }, transaction);
+          }
+          return record;
+        });
+        if (vehicle) emit('vehicle:location', { vehicleId, lat, lng, speed, heading, status: vehicle.status, timestamp: vehicle.lastUpdated });
       } catch (err) {
         console.error('vehicle:location failed', err.message);
       }

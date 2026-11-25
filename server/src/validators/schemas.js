@@ -15,12 +15,12 @@ export const phone = z
   );
 
 export const loginSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().email().max(254),
   password: z.string().min(1),
 });
 
 export const vehicleSchema = z.object({
-  registrationNo: z.string().trim().min(3).max(20),
+  registrationNo: z.string().trim().min(3).max(20).toUpperCase(),
   type: z.enum(VEHICLE_TYPES),
   make: z.string().trim().max(40).optional(),
   model: z.string().trim().max(40).optional(),
@@ -34,8 +34,8 @@ export const vehicleSchema = z.object({
 export const driverSchema = z.object({
   name: z.string().trim().min(2).max(80),
   phone,
-  email: z.preprocess(blankToUndefined, z.string().trim().email().optional()),
-  licenseNo: z.string().trim().min(5).max(30),
+  email: z.preprocess(blankToUndefined, z.string().trim().email().max(254).toLowerCase().optional()),
+  licenseNo: z.string().trim().min(5).max(30).toUpperCase(),
   licenseExpiry: optionalDate,
   status: z.enum(DRIVER_STATUSES).default('available'),
   rating: z.coerce.number().min(0).max(5).default(4),

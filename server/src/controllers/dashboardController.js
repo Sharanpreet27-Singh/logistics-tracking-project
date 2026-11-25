@@ -1,9 +1,13 @@
-import { Vehicle } from '../models/Vehicle.js';
-import { Shipment } from '../models/Shipment.js';
+import { Op } from 'sequelize';
+import { sequelize } from '../config/db.js';
+import { Shipment, Vehicle, serialize } from '../models/index.js';
 import { ACTIVE_SHIPMENT } from '../models/constants.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
-const countBy = (rows) => Object.fromEntries(rows.map((r) => [r._id, r.count]));
+const countBy = (rows) => Object.fromEntries(rows.map(({ status, count }) => [status, Number(count)]));
+const statusCounts = (Model) => Model.findAll({
+  attributes: ['status', [sequelize.fn('COUNT', sequelize.col('id')), 'count']], group: ['status'], raw: true,
+});
 
 /**
  * Days are bucketed in the fleet's local time zone (REPORT_TZ, default: the server's zone),
@@ -16,12 +20,12 @@ export const dayKey = (d) => dayFormat.format(new Date(d)); // "YYYY-MM-DD"
 export const lastDayKeys = (n) => Array.from({ length: n }, (_, i) => dayKey(Date.now() - (n - 1 - i) * 86400000));
 
 export const stats = asyncHandler(async (_req, res) => {
-  const [vehicleRows, shipmentRows, delivered, activeVehicleIds, recent] = await Promise.all([
-    Vehicle.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
-    Shipment.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
-    Shipment.find({ status: 'Delivered', deliveredAt: { $ne: null } }).select('deliveredAt eta').lean(),
-    Shipment.distinct('vehicle', { status: { $in: ACTIVE_SHIPMENT }, vehicle: { $ne: null } }),
-    Shipment.find().sort({ createdAt: -1 }).limit(6).populate('vehicle driver').lean(),
+  const [vehicleRows, shipmentRows, delivered, activeVehicles, recent] = await Promise.all([
+    statusCounts(Vehicle),
+    statusCounts(Shipment),
+    Shipment.findAll({ where: { status: 'Delivered', deliveredAt: { [Op.ne]: null } }, attributes: ['deliveredAt', 'eta'] }),
+    Shipment.count({ col: 'vehicle', distinct: true, where: { status: { [Op.in]: ACTIVE_SHIPMENT } } }),
+    Shipment.findAll({ order: [['createdAt', 'DESC']], limit: 6, include: ['vehicleRecord', 'driverRecord'] }),
   ]);
 
   const vehicleByStatus = countBy(vehicleRows);
@@ -44,9 +48,9 @@ export const stats = asyncHandler(async (_req, res) => {
       shipments: { total: totalShipments, byStatus: shipmentByStatus },
       deliveriesPerDay: Object.entries(perDay).map(([date, count]) => ({ date, count })),
       onTimeRate: delivered.length ? Math.round((onTime / delivered.length) * 100) : null,
-      utilization: totalVehicles ? Math.round((activeVehicleIds.length / totalVehicles) * 100) : 0,
+      utilization: totalVehicles ? Math.round((activeVehicles / totalVehicles) * 100) : 0,
       timeZone: REPORT_TZ,
-      recent,
+      recent: recent.map(serialize),
     },
   });
 });

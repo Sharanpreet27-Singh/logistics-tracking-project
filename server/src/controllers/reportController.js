@@ -1,15 +1,17 @@
+import { Op } from 'sequelize';
 import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../models/Driver.js';
 import { Shipment } from '../models/Shipment.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { ApiError } from '../utils/ApiError.js';
 import { dayKey } from './dashboardController.js';
 
 const isOnTime = (s) => !s.eta || (s.deliveredAt && s.deliveredAt <= s.eta);
 
 async function perResource(Model, field, label) {
   const [items, shipments] = await Promise.all([
-    Model.find().lean(),
-    Shipment.find({ [field]: { $ne: null } }).select(`${field} status distanceKm deliveredAt eta`).lean(),
+    Model.findAll(),
+    Shipment.findAll({ where: { [field]: { [Op.ne]: null } }, attributes: [field, 'status', 'distanceKm', 'deliveredAt', 'eta'] }),
   ]);
   return items.map((item) => {
     const mine = shipments.filter((s) => String(s[field]) === String(item._id));
@@ -37,7 +39,11 @@ export const driverReport = asyncHandler(async (_req, res) =>
 export const deliveryReport = asyncHandler(async (req, res) => {
   const to = req.query.to ? new Date(req.query.to) : new Date();
   const from = req.query.from ? new Date(req.query.from) : new Date(to.getTime() - 29 * 86400000);
-  const delivered = await Shipment.find({ status: 'Delivered', deliveredAt: { $gte: from, $lte: to } }).lean();
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) throw new ApiError(400, 'Invalid report dates');
+  const delivered = await Shipment.findAll({
+    where: { status: 'Delivered', deliveredAt: { [Op.between]: [from, to] } },
+    attributes: ['deliveredAt', 'distanceKm', 'eta'],
+  });
   const days = {};
   for (const s of delivered) {
     const k = dayKey(s.deliveredAt);

@@ -1,4 +1,4 @@
-import { Shipment } from '../models/Shipment.js';
+import { Shipment, serialize } from '../models/index.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -7,11 +7,15 @@ import { asyncHandler } from '../utils/asyncHandler.js';
  * driver first name). Timeline notes are internal (they can name staff), so only status + time go out.
  */
 export const trackShipment = asyncHandler(async (req, res) => {
-  const s = await Shipment.findOne({ trackingId: String(req.params.trackingId).trim().toUpperCase() })
-    .populate('vehicle', 'registrationNo type location status')
-    .populate('driver', 'name')
-    .lean();
-  if (!s) throw new ApiError(404, 'No shipment found with this tracking ID');
+  const shipment = await Shipment.findOne({
+    where: { trackingId: String(req.params.trackingId).trim().toUpperCase() },
+    include: [
+      { association: 'vehicleRecord', attributes: ['_id', 'registrationNo', 'type', 'location', 'status'] },
+      { association: 'driverRecord', attributes: ['_id', 'name'] },
+    ],
+  });
+  if (!shipment) throw new ApiError(404, 'No shipment found with this tracking ID');
+  const s = serialize(shipment);
   const live = s.status === 'In Transit' && s.vehicle?.location ? { lat: s.vehicle.location.lat, lng: s.vehicle.location.lng } : null;
   res.json({
     success: true,

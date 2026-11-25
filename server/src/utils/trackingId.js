@@ -12,11 +12,3 @@ export function makeTrackingId(date = new Date()) {
   for (let i = 0; i < 6; i++) suffix += ALPHABET[randomInt(ALPHABET.length)];
   return `SHP-${dateStamp(date)}-${suffix}`;
 }
-
-export async function generateTrackingId(Shipment, date = new Date()) {
-  for (let i = 0; i < 5; i++) {
-    const id = makeTrackingId(date);
-    if (!(await Shipment.exists({ trackingId: id }))) return id;
-  }
-  throw new Error('Could not allocate a unique tracking ID');
-}
